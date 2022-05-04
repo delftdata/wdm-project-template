@@ -38,3 +38,13 @@ def add_credit(user_id: str, amount: int):
 @app.post('/pay/<user_id>/<order_id>/<amount>')
 def remove_credit(user_id: str, order_id: str, amount: int):
     pass
+
+
+@app.post('/cancel/<user_id>/<order_id>')
+def cancel_payment(user_id: str, order_id: str):
+    pass
+
+
+@app.post('/status/<user_id>/<order_id>')
+def payment_status(user_id: str, order_id: str):
+    pass
