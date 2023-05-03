@@ -41,7 +41,6 @@ public class OrderController {
     @ResponseStatus(value = HttpStatus.OK)
     void addItem(@PathVariable String order_id, @PathVariable String item_id){
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
-        //TODO check if item exists in stock service
         tmp.addItem(item_id);
         repository.save(tmp);
     }
@@ -54,10 +53,9 @@ public class OrderController {
         repository.save(tmp);
     }
 
-    @PostMapping("checkout/{order_id}")
+    @PostMapping("/checkout/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
     void checkout(@PathVariable String order_id){
-        //TODO logic if checkout is possible
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.setPaid(true);
         repository.save(tmp);

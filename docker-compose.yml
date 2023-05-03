@@ -27,9 +27,9 @@ services:
     command: redis-server --requirepass redis --maxmemory 512mb
 
   payment-service:
-    build: ./payment.py
+    build: ./payment
     image: user:latest
-    command: gunicorn -b 0.0.0.0:5000 app:app -w 1 --timeout 10
+    command: java -jar /app.jar
     env_file:
       - env/payment_redis.env
 

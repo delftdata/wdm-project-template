@@ -1,11 +1,5 @@
-FROM python:3.11-slim
-
-WORKDIR /home/flask-app
-
-COPY ./requirements.txt .
-
-RUN pip install -r requirements.txt
-
-COPY . .
-
+FROM eclipse-temurin:17-jdk-alpine
+VOLUME /tmp
+COPY build/libs/*SHOT.jar app.jar
 EXPOSE 5000
+#ENTRYPOINT ["java","-jar","/app.jar"]
