@@ -57,6 +57,10 @@ public class OrderController {
     @ResponseStatus(value = HttpStatus.OK)
     void checkout(@PathVariable String order_id){
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
+        //@TODO call payment service for payment
+
+        //@TODO call stock service for stock update
+
         tmp.setPaid(true);
         repository.save(tmp);
 

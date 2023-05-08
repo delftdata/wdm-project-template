@@ -2,6 +2,7 @@ package wdm.payment.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import wdm.payment.exception.InsufficientCreditException;
 import wdm.payment.exception.PaymentNotFoundException;
 import wdm.payment.model.User;
 import wdm.payment.repository.UserRepository;
@@ -39,20 +40,28 @@ public class PaymentController {
     @GetMapping("/status/{user_id}/{order_id}")
     boolean statusPayment(@PathVariable String user_id, @PathVariable String order_id){
         repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
+        //@TODO get payment status -> from user or from order?
+        
         return true;
     }
 
     @PostMapping("/cancel/{user_id}/{order_id}")
     void cancelPayment(@PathVariable String user_id, @PathVariable String order_id){
         repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
+        //@TODO cancel payment, give money back and set order to paid = false;
     }
 
     @PostMapping("/pay/{user_id}/{order_id}/{amount}")
     @ResponseStatus(value = HttpStatus.OK)
     void payPayment(@PathVariable String user_id, @PathVariable String order_id, @PathVariable float amount){
         User tmp = repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
-        tmp.decreaseCredit(amount);
-        repository.save(tmp);
+        if (tmp.getCredit() < amount) {
+            throw new InsufficientCreditException(tmp.getCredit(), amount);
+        }
+        else {
+            tmp.decreaseCredit(amount);
+            repository.save(tmp);
+        }
     }
 
 }
