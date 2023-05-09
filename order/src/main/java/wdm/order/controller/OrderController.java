@@ -7,6 +7,10 @@ import wdm.order.exception.OrderNotFoundException;
 import wdm.order.model.Order;
 import wdm.order.repository.OrderRepository;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 public class OrderController {
 
@@ -20,10 +24,11 @@ public class OrderController {
     }
 
     @PostMapping("/create/{user_id}")
-    String createOrder(@PathVariable String user_id){
+    Map<String, String> createOrder(@PathVariable String user_id){
         Order tmp = new Order(user_id);
         repository.save(tmp);
-        return tmp.getOrder_id();
+
+        return Collections.singletonMap("order_id", tmp.getOrder_id());
     }
 
     @DeleteMapping("/remove/{order_id}")

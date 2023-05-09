@@ -7,6 +7,9 @@ import wdm.stock.exception.StockNotFoundException;
 import wdm.stock.model.Stock;
 import wdm.stock.repository.StockRepository;
 
+import java.util.Collections;
+import java.util.Map;
+
 @RestController
 public class StockController {
 
@@ -22,10 +25,10 @@ public class StockController {
     }
 
     @PostMapping("/item/create/{price}")
-    String createItem(@PathVariable float price){
+    Map<String,String> createItem(@PathVariable float price){
         Stock tmp = new Stock(0, price);
         repository.save(tmp);
-        return tmp.idGet();
+        return Collections.singletonMap("item_id", tmp.idGet());
     }
 
     @PostMapping("/subtract/{item_id}/{amount}")

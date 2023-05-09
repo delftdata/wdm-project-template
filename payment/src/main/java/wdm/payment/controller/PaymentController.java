@@ -7,6 +7,9 @@ import wdm.payment.exception.PaymentNotFoundException;
 import wdm.payment.model.User;
 import wdm.payment.repository.UserRepository;
 
+import java.util.Collections;
+import java.util.Map;
+
 @RestController
 public class PaymentController {
 
@@ -22,27 +25,26 @@ public class PaymentController {
     }
 
     @PostMapping("/create_user")
-    String createUser(){
+    Map<String,String> createUser(){
         User tmp = new User();
         repository.save(tmp);
-        return tmp.getUser_id();
+        return Collections.singletonMap("user_id", tmp.getUser_id());
     }
 
     @PostMapping("/add_funds/{user_id}/{amount}")
-    boolean addFunds(@PathVariable String user_id, @PathVariable float amount){
+    Map<String,Boolean> addFunds(@PathVariable String user_id, @PathVariable float amount){
         boolean done = true;
         User tmp = repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
         tmp.increaseCredit(amount);
         repository.save(tmp);
-        return done;
+        return Collections.singletonMap("done", done);
     }
 
     @GetMapping("/status/{user_id}/{order_id}")
-    boolean statusPayment(@PathVariable String user_id, @PathVariable String order_id){
+    Map<String,Boolean> statusPayment(@PathVariable String user_id, @PathVariable String order_id){
+        boolean paid = true;
         repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
-        //@TODO get payment status -> from user or from order?
-        
-        return true;
+        return Collections.singletonMap("paid", paid);
     }
 
     @PostMapping("/cancel/{user_id}/{order_id}")
