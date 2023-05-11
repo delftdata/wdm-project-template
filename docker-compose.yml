@@ -22,7 +22,7 @@ services:
     container_name: order-db
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=DDB
+      - POSTGRES_PASSWORD=123
       - POSTGRES_DB=wdmorder
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     ports:
