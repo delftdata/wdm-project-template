@@ -8,7 +8,6 @@ import wdm.order.model.Order;
 import wdm.order.repository.OrderRepository;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -24,7 +23,7 @@ public class OrderController {
     }
 
     @PostMapping("/create/{user_id}")
-    Map<String, String> createOrder(@PathVariable String user_id){
+    Map<String, Long> createOrder(@PathVariable Long user_id){
         Order tmp = new Order(user_id);
         repository.save(tmp);
 
@@ -33,18 +32,18 @@ public class OrderController {
 
     @DeleteMapping("/remove/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void deleteOrder(@PathVariable String order_id){
+    void deleteOrder(@PathVariable Long order_id){
         repository.deleteById(order_id);
     }
 
     @GetMapping("/find/{order_id}")
-    Order findOrder(@PathVariable String order_id){
+    Order findOrder(@PathVariable Long order_id){
         return repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
     }
 
     @PostMapping("/addItem/{order_id}/{item_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void addItem(@PathVariable String order_id, @PathVariable String item_id){
+    void addItem(@PathVariable Long order_id, @PathVariable Long item_id){
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.addItem(item_id);
         repository.save(tmp);
@@ -52,7 +51,7 @@ public class OrderController {
 
     @DeleteMapping("/removeItem/{order_id}/{item_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void removeItem(@PathVariable String order_id, @PathVariable String item_id){
+    void removeItem(@PathVariable Long order_id, @PathVariable Long item_id){
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.removeItem(item_id);
         repository.save(tmp);
@@ -60,7 +59,7 @@ public class OrderController {
 
     @PostMapping("/checkout/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void checkout(@PathVariable String order_id){
+    void checkout(@PathVariable Long order_id){
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         //@TODO call payment service for payment
 

@@ -32,19 +32,19 @@ public class PaymentController {
     }
 
     @GetMapping("/find_user/{user_id}")
-    User findUser(@PathVariable String user_id){
+    User findUser(@PathVariable Long user_id){
         return repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
     }
 
     @PostMapping("/create_user")
-    Map<String,String> createUser(){
+    Map<String,Long> createUser(){
         User tmp = new User();
         repository.save(tmp);
         return Collections.singletonMap("user_id", tmp.getUser_id());
     }
 
     @PostMapping("/add_funds/{user_id}/{amount}")
-    Map<String,Boolean> addFunds(@PathVariable String user_id, @PathVariable float amount){
+    Map<String,Boolean> addFunds(@PathVariable Long user_id, @PathVariable float amount){
         boolean done = true;
         User tmp = repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
         tmp.increaseCredit(amount);
@@ -53,7 +53,7 @@ public class PaymentController {
     }
 
     @GetMapping("/status/{user_id}/{order_id}")
-    Map<String,Boolean> statusPayment(@PathVariable String user_id, @PathVariable String order_id) throws IOException {
+    Map<String,Boolean> statusPayment(@PathVariable Long user_id, @PathVariable Long order_id) throws IOException {
         repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
         URL url = new URL(gatewayUrl + "/find/" + order_id);
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
@@ -72,14 +72,14 @@ public class PaymentController {
     }
 
     @PostMapping("/cancel/{user_id}/{order_id}")
-    void cancelPayment(@PathVariable String user_id, @PathVariable String order_id){
+    void cancelPayment(@PathVariable Long user_id, @PathVariable Long order_id){
         repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
         //@TODO cancel payment, give money back and set order to paid = false;
     }
 
     @PostMapping("/pay/{user_id}/{order_id}/{amount}")
     @ResponseStatus(value = HttpStatus.OK)
-    void payPayment(@PathVariable String user_id, @PathVariable String order_id, @PathVariable float amount){
+    void payPayment(@PathVariable Long user_id, @PathVariable Long order_id, @PathVariable float amount){
         User tmp = repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
         if (tmp.getCredit() < amount) {
             throw new InsufficientCreditException(tmp.getCredit(), amount);

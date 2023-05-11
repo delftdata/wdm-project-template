@@ -5,4 +5,4 @@ import org.springframework.stereotype.Repository;
 import wdm.stock.model.Stock;
 
 @Repository
-public interface StockRepository extends CrudRepository<Stock, String> {}
+public interface StockRepository extends CrudRepository<Stock, Long> {}

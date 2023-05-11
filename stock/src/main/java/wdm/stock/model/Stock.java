@@ -1,6 +1,9 @@
 package wdm.stock.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 import java.io.Serializable;
@@ -8,7 +11,9 @@ import java.io.Serializable;
 @Entity
 public class Stock implements Serializable {
     @Id
-    String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "item_id")
+    Long item_id;
     int stock;
     float price;
 
@@ -21,8 +26,12 @@ public class Stock implements Serializable {
 
     }
 
-    public String idGet() {
-        return id;
+    public Long getItem_id() {
+        return item_id;
+    }
+
+    public void setItem_id(Long item_id) {
+        this.item_id = item_id;
     }
 
     public int getStock() {
@@ -40,7 +49,7 @@ public class Stock implements Serializable {
     @Override
     public String toString() {
         return "stock{" +
-                "id='" + id + '\'' +
+                "id='" + item_id + '\'' +
                 ", stock=" + stock +
                 ", price=" + price +
                 '}';

@@ -1,6 +1,9 @@
 package wdm.payment.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -9,14 +12,20 @@ import jakarta.persistence.Table;
 public class User {
 
     @Id
-    String user_id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
+    Long user_id;
     float credit;
 
     public User() {
         credit = 0;
     }
-    public String getUser_id() {
+    public Long getUser_id() {
         return user_id;
+    }
+
+    public void setUser_id(Long user_id) {
+        this.user_id = user_id;
     }
 
     public float getCredit() {

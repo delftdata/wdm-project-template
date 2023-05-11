@@ -10,9 +10,11 @@ services:
 
   order-service:
     build: ./order
-    image: order:latest
+    image: docker-spring-boot-postgres:latest
     depends_on:
       - order-db
+    ports:
+      - '5000:5000'
     command: java -jar /app.jar
 
   order-db:
@@ -32,10 +34,12 @@ services:
 
   payment-service:
     build: ./payment
-    image: user:latest
+    image: docker-spring-boot-postgres:latest
     depends_on:
       - payment-db
     command: java -jar /app.jar
+    ports:
+      - '5001:5001'
 #    env_file:
 #      - env/payment_redis.env
 
@@ -56,10 +60,12 @@ services:
 
   stock-service:
     build: ./stock
-    image: stock:latest
+    image: docker-spring-boot-postgres:latest
     depends_on:
       - stock-db
     command: java -jar /app.jar
+    ports:
+      - '5002:5002'
 
   stock-db:
     #    image: redis:latest

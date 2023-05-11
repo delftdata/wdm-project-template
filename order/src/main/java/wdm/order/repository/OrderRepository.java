@@ -5,4 +5,4 @@ import org.springframework.stereotype.Repository;
 import wdm.order.model.Order;
 
 @Repository
-public interface OrderRepository extends CrudRepository<Order, String> {}
+public interface OrderRepository extends CrudRepository<Order, Long> {}
