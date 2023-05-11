@@ -1,9 +1,9 @@
 package wdm.payment.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.redis.core.RedisHash;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 
-@RedisHash("User")
+@Entity
 public class User {
 
     @Id

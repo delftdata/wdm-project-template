@@ -11,28 +11,79 @@ services:
   order-service:
     build: ./order
     image: order:latest
+    depends_on:
+      - order-db
     command: java -jar /app.jar
 
   order-db:
-    image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
-
-  stock-service:
-    build: ./stock
-    image: stock:latest
-    command: java -jar /app.jar
-
-  stock-db:
-    image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    #    image: redis:latest
+    #    command: redis-server --requirepass redis --maxmemory 512mb
+    image: postgres:latest
+    container_name: order-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=DDB
+      - POSTGRES_DB=wdmorder
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    ports:
+      - '5432:5432'
+    volumes:
+      - /var/lib/postgresql/data
 
   payment-service:
     build: ./payment
     image: user:latest
+    depends_on:
+      - payment-db
     command: java -jar /app.jar
-    env_file:
-      - env/payment_redis.env
+#    env_file:
+#      - env/payment_redis.env
 
   payment-db:
-    image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    #    image: redis:latest
+    #    command: redis-server --requirepass redis --maxmemory 512mb
+    image: postgres:latest
+    container_name: payment-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123
+      - POSTGRES_DB=wdmpayment
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    ports:
+      - '5433:5432'
+    volumes:
+      - /var/lib/postgresql/data
+
+  stock-service:
+    build: ./stock
+    image: stock:latest
+    depends_on:
+      - stock-db
+    command: java -jar /app.jar
+
+  stock-db:
+    #    image: redis:latest
+    #    command: redis-server --requirepass redis --maxmemory 512mb
+    image: postgres:latest
+    container_name: stock-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123
+      - POSTGRES_DB=wdmstock
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    ports:
+      - '5434:5432'
+    volumes:
+      - /var/lib/postgresql/data
+#
+#  pgadmin:
+#    container_name: pgadmin
+#    image: dpage/pgadmin4
+#    environment:
+#      PGADMIN_DEFAULT_EMAIL: example@example.com
+#      PGADMIN_DEFAULT_PASSWORD: "password"
+#      PGADMIN_CONFIG_SERVER_MODE: 'False'
+#    volumes:
+#      - /var/lib/pgadmin
+#    ports:
+#      - "5431:80"

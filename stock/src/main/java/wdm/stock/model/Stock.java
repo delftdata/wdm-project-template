@@ -1,12 +1,11 @@
 package wdm.stock.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.redis.core.RedisHash;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
 
-import javax.annotation.processing.Generated;
 import java.io.Serializable;
 
-@RedisHash("Stock")
+@Entity
 public class Stock implements Serializable {
     @Id
     String id;
@@ -16,6 +15,10 @@ public class Stock implements Serializable {
     public Stock(int stock, float price) {
         this.stock = stock;
         this.price = price;
+    }
+
+    public Stock() {
+
     }
 
     public String idGet() {

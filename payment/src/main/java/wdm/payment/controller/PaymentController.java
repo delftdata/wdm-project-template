@@ -1,11 +1,20 @@
 package wdm.payment.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import wdm.payment.exception.InsufficientCreditException;
 import wdm.payment.exception.PaymentNotFoundException;
 import wdm.payment.model.User;
 import wdm.payment.repository.UserRepository;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 import java.util.Collections;
 import java.util.Map;
@@ -14,6 +23,9 @@ import java.util.Map;
 public class PaymentController {
 
     private final UserRepository repository;
+
+    @Value("${order.gateway.url}")
+    private String gatewayUrl;
 
     public PaymentController(UserRepository repository) {
         this.repository = repository;
@@ -41,10 +53,22 @@ public class PaymentController {
     }
 
     @GetMapping("/status/{user_id}/{order_id}")
-    Map<String,Boolean> statusPayment(@PathVariable String user_id, @PathVariable String order_id){
-        boolean paid = true;
+    Map<String,Boolean> statusPayment(@PathVariable String user_id, @PathVariable String order_id) throws IOException {
         repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
-        return Collections.singletonMap("paid", paid);
+        URL url = new URL(gatewayUrl + "/find/" + order_id);
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setRequestMethod("GET");
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
+        String inputLine;
+        StringBuilder response = new StringBuilder();
+        while ((inputLine = in.readLine()) != null) {
+            response.append(inputLine);
+        }
+        in.close();
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode order = objectMapper.readValue(response.toString(), JsonNode.class);
+        return Collections.singletonMap("paid", order.get("paid").asBoolean());
     }
 
     @PostMapping("/cancel/{user_id}/{order_id}")

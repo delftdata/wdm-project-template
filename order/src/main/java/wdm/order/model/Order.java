@@ -1,20 +1,27 @@
 package wdm.order.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.redis.core.RedisHash;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 
-@RedisHash("Order")
+@Entity
+@Table(name = "Orders")
 public class Order implements Serializable {
     @Id
     String order_id;
     boolean paid;
+    @ElementCollection
     ArrayList<String> items;
     String user_id;
     float total_cost;
 
+    public Order() {
+
+    }
     public Order(String user_id) {
         this.paid = false;
         this.items = new ArrayList<>();
