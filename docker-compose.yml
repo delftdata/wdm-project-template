@@ -10,7 +10,6 @@ services:
 
   order-service:
     build: ./order
-    image: docker-spring-boot-postgres:latest
     depends_on:
       - order-db
     ports:
@@ -18,8 +17,6 @@ services:
     command: java -jar /app.jar
 
   order-db:
-    #    image: redis:latest
-    #    command: redis-server --requirepass redis --maxmemory 512mb
     image: postgres:latest
     container_name: order-db
     environment:
@@ -34,18 +31,13 @@ services:
 
   payment-service:
     build: ./payment
-    image: docker-spring-boot-postgres:latest
     depends_on:
       - payment-db
     command: java -jar /app.jar
     ports:
       - '5001:5001'
-#    env_file:
-#      - env/payment_redis.env
 
   payment-db:
-    #    image: redis:latest
-    #    command: redis-server --requirepass redis --maxmemory 512mb
     image: postgres:latest
     container_name: payment-db
     environment:
@@ -60,7 +52,6 @@ services:
 
   stock-service:
     build: ./stock
-    image: docker-spring-boot-postgres:latest
     depends_on:
       - stock-db
     command: java -jar /app.jar
@@ -68,8 +59,6 @@ services:
       - '5002:5002'
 
   stock-db:
-    #    image: redis:latest
-    #    command: redis-server --requirepass redis --maxmemory 512mb
     image: postgres:latest
     container_name: stock-db
     environment:
