@@ -7,50 +7,57 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+import jakarta.persistence.*;
 
 @Entity
+@Table(name = "stock")
 public class Stock implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "item_id")
-    Long item_id;
-    int stock;
+    long id;
+    int qty;
     float price;
 
-    public Stock(int stock, float price) {
-        this.stock = stock;
+//    @OneToMany(mappedBy = "item")
+//    private List<ReservedStock> reservedStockList = new ArrayList<>();
+
+
+    public Stock(int qty, float price) {
+        this.qty = qty;
         this.price = price;
     }
 
     public Stock() {
-
     }
 
-    public Long getItem_id() {
-        return item_id;
+    public long idGet() {
+        return id;
     }
 
-    public void setItem_id(Long item_id) {
-        this.item_id = item_id;
+    public int getQty() {
+        return qty;
     }
 
-    public int getStock() {
-        return stock;
-    }
-
-    public void setStock(int stock) {
-        this.stock = stock;
+    public void setQty(int qty) {
+        this.qty = qty;
     }
 
     public float getPrice() {
         return price;
     }
 
+    public void setPrice(float price) {
+        this.price = price;
+    }
+
     @Override
     public String toString() {
-        return "stock{" +
-                "id='" + item_id + '\'' +
-                ", stock=" + stock +
+        return "Stock{" +
+                "id='" + id + '\'' +
+                ", qty=" + qty +
                 ", price=" + price +
                 '}';
     }
