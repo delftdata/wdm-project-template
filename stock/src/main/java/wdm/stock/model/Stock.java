@@ -1,44 +1,57 @@
 package wdm.stock.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.redis.core.RedisHash;
-
-import javax.annotation.processing.Generated;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
-@RedisHash("Stock")
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "stock")
 public class Stock implements Serializable {
     @Id
-    String id;
-    int stock;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    long id;
+    int qty;
     float price;
 
-    public Stock(int stock, float price) {
-        this.stock = stock;
+//    @OneToMany(mappedBy = "item")
+//    private List<ReservedStock> reservedStockList = new ArrayList<>();
+
+
+    public Stock(int qty, float price) {
+        this.qty = qty;
         this.price = price;
     }
 
-    public String idGet() {
+    public Stock() {
+    }
+
+    public long idGet() {
         return id;
     }
 
-    public int getStock() {
-        return stock;
+    public int getQty() {
+        return qty;
     }
 
-    public void setStock(int stock) {
-        this.stock = stock;
+    public void setQty(int qty) {
+        this.qty = qty;
     }
 
     public float getPrice() {
         return price;
     }
 
+    public void setPrice(float price) {
+        this.price = price;
+    }
+
     @Override
     public String toString() {
-        return "stock{" +
+        return "Stock{" +
                 "id='" + id + '\'' +
-                ", stock=" + stock +
+                ", qty=" + qty +
                 ", price=" + price +
                 '}';
     }

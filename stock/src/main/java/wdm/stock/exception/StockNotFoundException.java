@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ResponseStatus(code = HttpStatus.BAD_REQUEST, reason = "Item not found")
 public class StockNotFoundException extends RuntimeException{
-    public StockNotFoundException(String item_id){
+    public StockNotFoundException(long item_id){
         super("item: " + item_id + " not found");
     }
 
