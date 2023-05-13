@@ -2,13 +2,16 @@ package wdm.payment.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import wdm.payment.exception.InsufficientCreditException;
 import wdm.payment.exception.PaymentNotFoundException;
+import wdm.payment.exception.UserNotFoundException;
 import wdm.payment.model.User;
 import wdm.payment.repository.UserRepository;
+import wdm.payment.service.PaymentService;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -27,13 +30,16 @@ public class PaymentController {
     @Value("${order.gateway.url}")
     private String gatewayUrl;
 
-    public PaymentController(UserRepository repository) {
+    PaymentService paymentService;
+
+    public PaymentController(UserRepository repository, PaymentService paymentService) {
         this.repository = repository;
+        this.paymentService = paymentService;
     }
 
     @GetMapping("/find_user/{user_id}")
     User findUser(@PathVariable Long user_id){
-        return repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
+        return repository.findById(user_id).orElseThrow(()-> new UserNotFoundException(user_id));
     }
 
     @PostMapping("/create_user")
@@ -46,7 +52,7 @@ public class PaymentController {
     @PostMapping("/add_funds/{user_id}/{amount}")
     Map<String,Boolean> addFunds(@PathVariable Long user_id, @PathVariable float amount){
         boolean done = true;
-        User tmp = repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
+        User tmp = repository.findById(user_id).orElseThrow(()-> new UserNotFoundException(user_id));
         tmp.increaseCredit(amount);
         repository.save(tmp);
         return Collections.singletonMap("done", done);
@@ -54,7 +60,7 @@ public class PaymentController {
 
     @GetMapping("/status/{user_id}/{order_id}")
     Map<String,Boolean> statusPayment(@PathVariable Long user_id, @PathVariable Long order_id) throws IOException {
-        repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
+        repository.findById(user_id).orElseThrow(()-> new UserNotFoundException(user_id));
         URL url = new URL(gatewayUrl + "/find/" + order_id);
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("GET");
@@ -72,22 +78,21 @@ public class PaymentController {
     }
 
     @PostMapping("/cancel/{user_id}/{order_id}")
-    void cancelPayment(@PathVariable Long user_id, @PathVariable Long order_id){
-        repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
-        //@TODO cancel payment, give money back and set order to paid = false;
+    void cancelPayment(@PathVariable long user_id, @PathVariable long order_id){
+       paymentService.cancelBooking(user_id,order_id);
+    }
+
+    @PostMapping("/reserve/{user_id}/{order_id}/{amount}")
+    @ResponseStatus(value = HttpStatus.OK)
+    void reservePayment(@PathVariable long user_id, @PathVariable long order_id, @PathVariable float amount){
+        paymentService.reserveCredit(user_id, order_id, amount);
     }
 
     @PostMapping("/pay/{user_id}/{order_id}/{amount}")
     @ResponseStatus(value = HttpStatus.OK)
-    void payPayment(@PathVariable Long user_id, @PathVariable Long order_id, @PathVariable float amount){
-        User tmp = repository.findById(user_id).orElseThrow(()-> new PaymentNotFoundException(user_id));
-        if (tmp.getCredit() < amount) {
-            throw new InsufficientCreditException(tmp.getCredit(), amount);
-        }
-        else {
-            tmp.decreaseCredit(amount);
-            repository.save(tmp);
-        }
+    void payPayment(@PathVariable long user_id, @PathVariable long order_id, @PathVariable float amount){
+        paymentService.bookCredit(user_id, order_id, amount);
     }
+
 
 }
