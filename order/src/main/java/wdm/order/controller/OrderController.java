@@ -63,15 +63,14 @@ public class OrderController {
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         //@TODO call payment service for payment
         try{
-            orderService.processOrder(tmp);
+            boolean reserveStock = orderService.processStock(tmp);
+            boolean reservePayment = orderService.processPayment(tmp);
+            if(reserveStock && reservePayment){
+                orderService.checkout(tmp);
+            }
         } catch (Exception e){
-            throw new RuntimeException("Error in order processing");
+            throw new RuntimeException("Error in order processing Order");
         }
-
-        //@TODO call stock service for stock update
-        tmp.setPaid(true);
-        repository.save(tmp);
-
     }
 
 
