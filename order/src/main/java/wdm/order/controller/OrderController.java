@@ -6,18 +6,17 @@ import org.springframework.web.bind.annotation.*;
 import wdm.order.exception.OrderNotFoundException;
 import wdm.order.model.Order;
 import wdm.order.repository.OrderRepository;
+import wdm.order.service.OrderService;
 
 import java.util.Collections;
 import java.util.Map;
 
 @RestController
 public class OrderController {
-
-    @Value("${order.gateway.url}")
-    private String gatewayUrl;
-
     private final OrderRepository repository;
 
+    OrderService orderService;
+    
     public OrderController(OrderRepository repository) {
         this.repository = repository;
     }
@@ -62,12 +61,15 @@ public class OrderController {
     void checkout(@PathVariable Long order_id){
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         //@TODO call payment service for payment
-
-        //@TODO call stock service for stock update
-
-        tmp.setPaid(true);
-        repository.save(tmp);
-
+        try{
+            boolean reserveStock = orderService.processStock(tmp);
+            boolean reservePayment = orderService.processPayment(tmp);
+            if(reserveStock && reservePayment){
+                orderService.checkout(tmp);
+            }
+        } catch (Exception e){
+            throw new RuntimeException("Error in order processing Order");
+        }
     }
 
 
