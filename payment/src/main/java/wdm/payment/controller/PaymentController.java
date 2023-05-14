@@ -59,22 +59,8 @@ public class PaymentController {
     }
 
     @GetMapping("/status/{user_id}/{order_id}")
-    Map<String,Boolean> statusPayment(@PathVariable Long user_id, @PathVariable Long order_id) throws IOException {
-        repository.findById(user_id).orElseThrow(()-> new UserNotFoundException(user_id));
-        URL url = new URL(gatewayUrl + "/find/" + order_id);
-        HttpURLConnection con = (HttpURLConnection) url.openConnection();
-        con.setRequestMethod("GET");
-
-        BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-        String inputLine;
-        StringBuilder response = new StringBuilder();
-        while ((inputLine = in.readLine()) != null) {
-            response.append(inputLine);
-        }
-        in.close();
-        ObjectMapper objectMapper = new ObjectMapper();
-        JsonNode order = objectMapper.readValue(response.toString(), JsonNode.class);
-        return Collections.singletonMap("paid", order.get("paid").asBoolean());
+    Map<String,Boolean> statusPayment(@PathVariable Long user_id, @PathVariable Long order_id) {
+        return Collections.singletonMap("paid", paymentService.checkStatusPayment(user_id, order_id));
     }
 
     @PostMapping("/cancel/{user_id}/{order_id}")

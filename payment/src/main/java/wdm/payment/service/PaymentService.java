@@ -69,4 +69,10 @@ public class PaymentService {
 
     }
 
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public boolean checkStatusPayment(long user_id, long order_id) {
+        Payment payment = paymentRepository.findByUserIdAndOrderId(user_id, order_id).orElseThrow(()-> new RuntimeException("Error occured with checking the booking for user: " + user_id + " and order: " + order_id));
+        return payment.getBooked_amount() > 0 && payment.getReserved_amount() == 0;
+    }
+
 }
