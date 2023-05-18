@@ -1,6 +1,5 @@
 package wdm.stock.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import wdm.stock.exception.StockNotFoundException;
@@ -16,12 +15,13 @@ public class StockController {
 
     private final StockRepository repository;
 
-    public StockController(StockRepository repository) {
+    private final StockService stockService;
+
+    public StockController(StockRepository repository, StockService stockService) {
         this.repository = repository;
+        this.stockService = stockService;
     }
 
-    @Autowired
-    StockService stockService;
 
     @GetMapping("/find/{item_id}")
     Stock findStock(@PathVariable Long item_id){

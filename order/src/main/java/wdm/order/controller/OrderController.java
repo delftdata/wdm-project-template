@@ -1,6 +1,5 @@
 package wdm.order.controller;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import wdm.order.exception.OrderNotFoundException;
@@ -15,10 +14,11 @@ import java.util.Map;
 public class OrderController {
     private final OrderRepository repository;
 
-    OrderService orderService;
+    private final OrderService orderService;
     
-    public OrderController(OrderRepository repository) {
+    public OrderController(OrderRepository repository, OrderService orderService) {
         this.repository = repository;
+        this.orderService = orderService;
     }
 
     @PostMapping("/create/{user_id}")
@@ -58,18 +58,14 @@ public class OrderController {
 
     @PostMapping("/checkout/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void checkout(@PathVariable Long order_id){
+    Map<String, Boolean> checkout(@PathVariable Long order_id) {
+        boolean checkout = false;
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
-        //@TODO call payment service for payment
-        try{
-            boolean reserveStock = orderService.processStock(tmp);
-            boolean reservePayment = orderService.processPayment(tmp);
-            if(reserveStock && reservePayment){
-                orderService.checkout(tmp);
-            }
-        } catch (Exception e){
-            throw new RuntimeException("Error in order processing Order");
+        Boolean reserved = orderService.reserveOut(tmp);
+        if (reserved) {
+            checkout = orderService.checkout(tmp);
         }
+        return Collections.singletonMap("checkout_succes", checkout);
     }
 
 
