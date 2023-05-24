@@ -59,11 +59,22 @@ public class OrderController {
     @PostMapping("/checkout/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
     Map<String, Boolean> checkout(@PathVariable Long order_id) {
+        boolean reserved = false;
         boolean checkout = false;
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
-        Boolean reserved = orderService.reserveOut(tmp);
+        try {
+            //Exceptions are handled inside the .reserveout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
+            reserved = orderService.reserveOut(tmp);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         if (reserved) {
-            checkout = orderService.checkout(tmp);
+            try {
+                checkout = orderService.checkout(tmp);
+            } catch (Exception e) {
+                //Exceptions are handled inside the .checkout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
+                throw new RuntimeException(e);
+            }
         }
         return Collections.singletonMap("checkout_succes", checkout);
     }

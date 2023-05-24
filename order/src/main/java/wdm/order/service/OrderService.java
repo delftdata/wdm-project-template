@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -26,6 +27,25 @@ public class OrderService {
 
     @Value("${timeout-minutes}")
     private int timeOut;
+
+//    public float getItemPrice(Long item_id) throws Exception {
+//        String url = stockServiceUrl + "/find/" + item_id;
+//        try {
+//            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
+//
+//            if (response.getStatusCodeValue() != 200) {
+//                System.out.println("Error: " + response.getStatusCodeValue());
+//                throw new Exception();
+//            }
+//            else {
+//                Stock stock = response.getBody();
+//                return stock.getPrice();
+//            }
+//        } catch (Exception e) {
+//            System.out.println("Error: " + e.getMessage());
+//            throw e;
+//        }
+//    }
 
     @Async
     public CompletableFuture<Boolean> reserveStock(Order order) {
@@ -126,7 +146,30 @@ public class OrderService {
         return CompletableFuture.completedFuture(true);
     }
 
-    public boolean reserveOut(Order order) {
+    public Boolean cancelPayment(Order order) {
+        Long order_id = order.getOrder_id();
+        Long user_id = order.getUser_id();
+        float amount = order.getTotal_cost();
+
+        // Pay the order from payment
+        String url = paymentServiceUrl + "/cancel/" + user_id + "/" + order_id;
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
+
+            if (response.getStatusCodeValue() != 200) {
+                System.out.println("Error: " + response.getStatusCodeValue());
+                return false;
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            return false;
+        }
+
+        return true;
+    }
+
+    public boolean reserveOut(Order order) throws ExecutionException, InterruptedException {
         CompletableFuture<Boolean> reserveStock = reserveStock(order);
         CompletableFuture<Boolean> reservePayment = reservePayment(order);
 
@@ -139,17 +182,17 @@ public class OrderService {
                 return true;
             }
         } catch (Exception e) {
-            if (!reserveStock.isCompletedExceptionally()) {
+            if (!reserveStock.isCompletedExceptionally() && reserveStock.get()) {
                 //@TODO reserveStock rollback
             }
-            if (!reservePayment.isCompletedExceptionally()) {
+            if (!reservePayment.isCompletedExceptionally() && reservePayment.get()) {
                 //@TODO reservePayment rollback
             }
         }
         return false;
     }
 
-    public boolean checkout(Order order) {
+    public boolean checkout(Order order) throws ExecutionException, InterruptedException {
         CompletableFuture<Boolean> bookStock = bookStock(order);
         CompletableFuture<Boolean> bookPayment = bookPayment(order);
 
@@ -161,11 +204,14 @@ public class OrderService {
                 return true;
             }
         } catch (Exception e) {
-            if (!bookStock.isCompletedExceptionally()) {
+            //This get should never throw an exception
+            if (!bookStock.isCompletedExceptionally() && bookStock.get()) {
                 //@TODO bookStock rollback
             }
-            if (!bookPayment.isCompletedExceptionally()) {
-                //@TODO bookPayment rollback
+            //This get should never throw an exception
+            if (!bookPayment.isCompletedExceptionally() && bookPayment.get()) {
+                //@TODO some sort of logging or retry for failure of rollback.
+                cancelPayment(order);
             }
         }
 
