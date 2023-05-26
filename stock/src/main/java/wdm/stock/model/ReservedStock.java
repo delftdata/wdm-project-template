@@ -31,6 +31,9 @@ public class ReservedStock implements Serializable {
         this.item_id = item_id;
     }
 
+    public long idGet() {
+        return id;
+    }
     public int getReservedQty() {
         return reservedQty;
     }
