@@ -57,16 +57,11 @@ public class PaymentService {
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public void cancelBooking(long user_id, long order_id){
         Payment payment = paymentRepository.findByUserIdAndOrderId(user_id, order_id).orElseThrow(() -> new RuntimeException("Error occured with cancelling the booking for user: " + user_id + " and order: " + order_id));
-        if(payment.getBooked_amount() > 0 && payment.getReserved_amount() == 0){
-            payment.setReserved_amount(payment.getBooked_amount());
-            payment.setBooked_amount(0);
-            paymentRepository.save(payment);
-            return;
-        } else if (payment.getReserved_amount() > 0 && payment.getBooked_amount() == 0) {
-            return;
-        }
-        throw new RuntimeException("Error occured with cancelling the booking for user: " + user_id + " and order: " + order_id);
-
+        User user = userrepository.findById(user_id).orElseThrow(()-> new UserNotFoundException(user_id));
+        float canceled = payment.getBooked_amount() + payment.getReserved_amount();
+        user.increaseCredit(canceled);
+        paymentRepository.delete(payment);
+        userrepository.save(user);
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
