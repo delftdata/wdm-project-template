@@ -42,17 +42,19 @@ public class OrderController {
 
     @PostMapping("/addItem/{order_id}/{item_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void addItem(@PathVariable Long order_id, @PathVariable Long item_id){
+    void addItem(@PathVariable Long order_id, @PathVariable Long item_id) throws Exception {
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.addItem(item_id);
+        tmp.setTotal_cost(tmp.getTotal_cost() + orderService.getItemPrice(item_id));
         repository.save(tmp);
     }
 
     @DeleteMapping("/removeItem/{order_id}/{item_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void removeItem(@PathVariable Long order_id, @PathVariable Long item_id){
+    void removeItem(@PathVariable Long order_id, @PathVariable Long item_id) throws Exception {
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.removeItem(item_id);
+        tmp.setTotal_cost(tmp.getTotal_cost() - orderService.getItemPrice(item_id));
         repository.save(tmp);
     }
 

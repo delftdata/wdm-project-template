@@ -1,9 +1,15 @@
 package wdm.order.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.retry.ExhaustedRetryException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.ResponseEntity;
 import wdm.order.model.Order;
@@ -28,24 +34,27 @@ public class OrderService {
     @Value("${timeout-minutes}")
     private int timeOut;
 
-//    public float getItemPrice(Long item_id) throws Exception {
-//        String url = stockServiceUrl + "/find/" + item_id;
-//        try {
-//            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
-//
-//            if (response.getStatusCodeValue() != 200) {
-//                System.out.println("Error: " + response.getStatusCodeValue());
-//                throw new Exception();
-//            }
-//            else {
-//                Stock stock = response.getBody();
-//                return stock.getPrice();
-//            }
-//        } catch (Exception e) {
-//            System.out.println("Error: " + e.getMessage());
-//            throw e;
-//        }
-//    }
+    public float getItemPrice(Long item_id) throws Exception {
+        String url = stockServiceUrl + "/find/" + item_id;
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
+
+            if (response.getStatusCodeValue() != 200) {
+                System.out.println("Error: " + response.getStatusCodeValue());
+                throw new Exception();
+            }
+            else {
+                //Handling response as json to ensure decoupling between order and stock.
+                String stock = response.getBody();
+                ObjectMapper objectMapper = new ObjectMapper();
+                JsonNode stockJson = objectMapper.readValue(stock, JsonNode.class);
+                return (float) stockJson.get("price").asDouble();
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            throw e;
+        }
+    }
 
     @Async
     public CompletableFuture<Boolean> reserveStock(Order order) {
@@ -75,6 +84,28 @@ public class OrderService {
             }
         }
         return CompletableFuture.completedFuture(true);
+    }
+
+    public boolean rollbackRStock(Order order) {
+        // Retrieve the items from the order and aggregate to get count of each item
+        Long order_id = order.getOrder_id();
+
+        //Call the rollback endpoint in the other microservice for each unique item
+        for (Long itemId : order.getItems()) {
+            String url = stockServiceUrl + "/rollback/" + order_id + "/" + itemId;
+
+            try {
+                ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
+                if (response.getStatusCode() != HttpStatus.OK) {
+                    System.out.println("Error: " + response.getStatusCode());
+                    return false;
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+                return false;
+            }
+        }
+        return true;
     }
 
     @Async
@@ -146,26 +177,39 @@ public class OrderService {
         return CompletableFuture.completedFuture(true);
     }
 
-    public Boolean cancelPayment(Order order) {
+    //Example of control method for retry.
+    public boolean cancelPayment(Order order) {
+        try {
+            return cancelPaymentRequest(order);
+        }
+        catch (ExhaustedRetryException e) {
+            //@TODO logging for retry
+            return false;
+        }
+        catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    //Example of retry, @TODO move this to the book methods (probably via control method as books give completeablefutures back)
+    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 10000))
+    public boolean cancelPaymentRequest(Order order) throws HttpClientErrorException {
         Long order_id = order.getOrder_id();
         Long user_id = order.getUser_id();
-        float amount = order.getTotal_cost();
 
         // Pay the order from payment
         String url = paymentServiceUrl + "/cancel/" + user_id + "/" + order_id;
 
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
-
-            if (response.getStatusCodeValue() != 200) {
-                System.out.println("Error: " + response.getStatusCodeValue());
+            if (response.getStatusCode() != HttpStatus.OK) {
                 return false;
             }
         } catch (Exception e) {
             System.out.println("Error: " + e.getMessage());
-            return false;
+            throw e;
         }
-
         return true;
     }
 
@@ -183,7 +227,8 @@ public class OrderService {
             }
         } catch (Exception e) {
             if (!reserveStock.isCompletedExceptionally() && reserveStock.get()) {
-                //@TODO reserveStock rollback
+                //@TODO some sort of logging or retry for failure of rollback.
+                rollbackRStock(order);
             }
             if (!reservePayment.isCompletedExceptionally() && reservePayment.get()) {
                 //@TODO reservePayment rollback

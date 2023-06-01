@@ -65,7 +65,6 @@ public class PaymentService {
             return;
         }
         throw new RuntimeException("Error occured with cancelling the booking for user: " + user_id + " and order: " + order_id);
-
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)

@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import wdm.stock.exception.StockNotFoundException;
 import wdm.stock.model.Stock;
+import wdm.stock.repository.ReservedStockRepository;
+import wdm.stock.repository.StockRepository;
 
 @Service
 public class StockService {
@@ -69,6 +71,24 @@ public class StockService {
             }
         } catch (Exception e) {
             throw new RuntimeException("Error occurred while booking stock: " + e.getMessage());
+        }
+    }
+
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public void rollBackStock(Stock stock, Long orderId) {
+        long itemId = stock.idGet();
+        try {
+            String rollbackReservedQuery = "DELETE FROM reserved_stock WHERE item_id = ? AND order_id = ? RETURNING qty";
+            int quantity = jdbcTemplate.update(rollbackReservedQuery, itemId, orderId);
+
+            if (quantity == 0) {
+                throw new StockNotFoundException(itemId);
+            } else {
+                String updateStockQuery = "UPDATE stock SET qty = qty + ? WHERE id = ? AND qty >= ?";
+                jdbcTemplate.update(updateStockQuery, quantity, 0, orderId, itemId);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error occurred while rolling back stock: " + e.getMessage());
         }
     }
 }
