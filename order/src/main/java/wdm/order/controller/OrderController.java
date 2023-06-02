@@ -1,6 +1,5 @@
 package wdm.order.controller;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import wdm.order.exception.OrderNotFoundException;
@@ -15,10 +14,11 @@ import java.util.Map;
 public class OrderController {
     private final OrderRepository repository;
 
-    OrderService orderService;
+    private final OrderService orderService;
     
-    public OrderController(OrderRepository repository) {
+    public OrderController(OrderRepository repository, OrderService orderService) {
         this.repository = repository;
+        this.orderService = orderService;
     }
 
     @PostMapping("/create/{user_id}")
@@ -42,34 +42,43 @@ public class OrderController {
 
     @PostMapping("/addItem/{order_id}/{item_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void addItem(@PathVariable Long order_id, @PathVariable Long item_id){
+    void addItem(@PathVariable Long order_id, @PathVariable Long item_id) throws Exception {
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.addItem(item_id);
+        tmp.setTotal_cost(tmp.getTotal_cost() + orderService.getItemPrice(item_id));
         repository.save(tmp);
     }
 
     @DeleteMapping("/removeItem/{order_id}/{item_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void removeItem(@PathVariable Long order_id, @PathVariable Long item_id){
+    void removeItem(@PathVariable Long order_id, @PathVariable Long item_id) throws Exception {
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
         tmp.removeItem(item_id);
+        tmp.setTotal_cost(tmp.getTotal_cost() - orderService.getItemPrice(item_id));
         repository.save(tmp);
     }
 
     @PostMapping("/checkout/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    void checkout(@PathVariable Long order_id){
+    Map<String, Boolean> checkout(@PathVariable Long order_id) {
+        boolean reserved = false;
+        boolean checkout = false;
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
-        //@TODO call payment service for payment
-        try{
-            boolean reserveStock = orderService.processStock(tmp);
-            boolean reservePayment = orderService.processPayment(tmp);
-            if(reserveStock && reservePayment){
-                orderService.checkout(tmp);
-            }
-        } catch (Exception e){
-            throw new RuntimeException("Error in order processing Order");
+        try {
+            //Exceptions are handled inside the .reserveout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
+            reserved = orderService.reserveOut(tmp);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
+        if (reserved) {
+            try {
+                checkout = orderService.checkout(tmp);
+            } catch (Exception e) {
+                //Exceptions are handled inside the .checkout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
+                throw new RuntimeException(e);
+            }
+        }
+        return Collections.singletonMap("checkout_succes", checkout);
     }
 
 

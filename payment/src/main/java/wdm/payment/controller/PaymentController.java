@@ -1,23 +1,12 @@
 package wdm.payment.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import wdm.payment.exception.InsufficientCreditException;
-import wdm.payment.exception.PaymentNotFoundException;
 import wdm.payment.exception.UserNotFoundException;
 import wdm.payment.model.User;
 import wdm.payment.repository.UserRepository;
 import wdm.payment.service.PaymentService;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 
 import java.util.Collections;
 import java.util.Map;
@@ -30,7 +19,7 @@ public class PaymentController {
     @Value("${order.gateway.url}")
     private String gatewayUrl;
 
-    PaymentService paymentService;
+    private final PaymentService paymentService;
 
     public PaymentController(UserRepository repository, PaymentService paymentService) {
         this.repository = repository;

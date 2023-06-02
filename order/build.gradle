@@ -18,6 +18,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 //	implementation group: 'org.springframework.boot', name: 'spring-boot-starter-data-redis', version: '3.0.6'
 	runtimeOnly 'org.postgresql:postgresql'
+	implementation 'org.springframework.retry:spring-retry'
 }
 
 tasks.named('test') {

@@ -1,6 +1,5 @@
 package wdm.payment.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,7 +65,6 @@ public class PaymentService {
             return;
         }
         throw new RuntimeException("Error occured with cancelling the booking for user: " + user_id + " and order: " + order_id);
-
     }
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
