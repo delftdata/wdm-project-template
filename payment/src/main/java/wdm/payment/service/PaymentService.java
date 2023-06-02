@@ -58,7 +58,7 @@ public class PaymentService {
     public void cancelBooking(long user_id, long order_id){
         Payment payment = paymentRepository.findByUserIdAndOrderId(user_id, order_id).orElseThrow(() -> new RuntimeException("Error occured with cancelling the booking for user: " + user_id + " and order: " + order_id));
         User user = userrepository.findById(user_id).orElseThrow(()-> new UserNotFoundException(user_id));
-        float canceled = payment.getBooked_amount() + payment.getReserved_amount();
+        float canceled = payment.getReserved_amount();
         user.increaseCredit(canceled);
         paymentRepository.delete(payment);
         userrepository.save(user);
