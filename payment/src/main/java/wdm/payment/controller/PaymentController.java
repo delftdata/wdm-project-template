@@ -15,10 +15,6 @@ import java.util.Map;
 public class PaymentController {
 
     private final UserRepository repository;
-
-    @Value("${order.gateway.url}")
-    private String gatewayUrl;
-
     private final PaymentService paymentService;
 
     public PaymentController(UserRepository repository, PaymentService paymentService) {
