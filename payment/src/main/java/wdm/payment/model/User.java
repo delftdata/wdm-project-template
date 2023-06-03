@@ -12,6 +12,9 @@ public class User {
     Long user_id;
     float credit;
 
+    @Version
+    private Long version;
+
     public User() {
         credit = 0;
     }
