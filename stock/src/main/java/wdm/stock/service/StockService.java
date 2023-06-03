@@ -1,6 +1,7 @@
 package wdm.stock.service;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCallback;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,6 +9,8 @@ import wdm.stock.exception.StockNotFoundException;
 import wdm.stock.model.Stock;
 import wdm.stock.repository.ReservedStockRepository;
 import wdm.stock.repository.StockRepository;
+
+import java.sql.ResultSet;
 
 @Service
 public class StockService {
@@ -78,14 +81,26 @@ public class StockService {
     public void rollBackStock(Stock stock, Long orderId) {
         long itemId = stock.idGet();
         try {
-            String rollbackReservedQuery = "DELETE FROM reserved_stock WHERE item_id = ? AND order_id = ? RETURNING qty";
-            int quantity = jdbcTemplate.update(rollbackReservedQuery, itemId, orderId);
+            String rollbackReservedQuery = "DELETE FROM reserved_stock WHERE item_id = ? AND order_id = ? RETURNING reserved_qty";
+            Integer reservedQty = jdbcTemplate.execute(rollbackReservedQuery, (PreparedStatementCallback<Integer>) ps -> {
+                ps.setLong(1, itemId);
+                ps.setLong(2, orderId);
+                boolean hasResult = ps.execute();
+                int quantity = 0;
+                if (hasResult) {
+                    ResultSet rs = ps.getResultSet();
+                    if (rs.next()) {
+                        quantity = rs.getInt("reserved_qty");
+                    }
+                }
+                return quantity;
+            });
 
-            if (quantity == 0) {
+            if (reservedQty == null || reservedQty == 0) {
                 throw new StockNotFoundException(itemId);
             } else {
-                String updateStockQuery = "UPDATE stock SET qty = qty + ? WHERE id = ? AND qty >= ?";
-                jdbcTemplate.update(updateStockQuery, quantity, 0, orderId, itemId);
+                String updateStockQuery = "UPDATE stock SET qty = qty + ? WHERE id = ?";
+                jdbcTemplate.update(updateStockQuery, reservedQty, itemId);
             }
         } catch (Exception e) {
             throw new RuntimeException("Error occurred while rolling back stock: " + e.getMessage());

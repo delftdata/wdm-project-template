@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
-import org.springframework.retry.ExhaustedRetryException;
+import org.springframework.retry.RetryException;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class OrderService {
@@ -131,6 +132,12 @@ public class OrderService {
         return CompletableFuture.completedFuture(true);
     }
 
+    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 10000))
+    public boolean retryBookStock(Order order) throws ExecutionException, InterruptedException, TimeoutException {
+        CompletableFuture<Boolean> bookSuccess = bookStock(order);
+        return bookSuccess.get(30, TimeUnit.SECONDS);
+    }
+
     @Async
     public CompletableFuture<Boolean> reservePayment(Order order) {
         Long user_id = order.getUser_id();
@@ -150,7 +157,25 @@ public class OrderService {
             return CompletableFuture.completedFuture(false);
         }
         return CompletableFuture.completedFuture(true);
+    }
 
+    public boolean rollbackRPayment(Order order) throws HttpClientErrorException {
+        Long order_id = order.getOrder_id();
+        Long user_id = order.getUser_id();
+
+        // Pay the order from payment
+        String url = paymentServiceUrl + "/cancel/" + user_id + "/" + order_id;
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
+            if (response.getStatusCode() != HttpStatus.OK) {
+                return false;
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+            throw e;
+        }
+        return true;
     }
 
     @Async
@@ -177,40 +202,10 @@ public class OrderService {
         return CompletableFuture.completedFuture(true);
     }
 
-    //Example of control method for retry.
-    public boolean cancelPayment(Order order) {
-        try {
-            return cancelPaymentRequest(order);
-        }
-        catch (ExhaustedRetryException e) {
-            //@TODO logging for retry
-            return false;
-        }
-        catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-            return false;
-        }
-    }
-
-    //Example of retry, @TODO move this to the book methods (probably via control method as books give completeablefutures back)
     @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 10000))
-    public boolean cancelPaymentRequest(Order order) throws HttpClientErrorException {
-        Long order_id = order.getOrder_id();
-        Long user_id = order.getUser_id();
-
-        // Pay the order from payment
-        String url = paymentServiceUrl + "/cancel/" + user_id + "/" + order_id;
-
-        try {
-            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
-            if (response.getStatusCode() != HttpStatus.OK) {
-                return false;
-            }
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-            throw e;
-        }
-        return true;
+    public boolean retryBookPayment(Order order) throws ExecutionException, InterruptedException, TimeoutException {
+        CompletableFuture<Boolean> bookSuccess = bookPayment(order);
+        return bookSuccess.get(30, TimeUnit.SECONDS);
     }
 
     public boolean reserveOut(Order order) throws ExecutionException, InterruptedException {
@@ -225,13 +220,24 @@ public class OrderService {
             if (reserveStock.get() && reservePayment.get()) {
                 return true;
             }
+
+            if (reserveStock.get()) {
+                rollbackRStock(order);
+            }
+            if (reservePayment.get()) {
+                rollbackRPayment(order);
+            }
+
         } catch (Exception e) {
             if (!reserveStock.isCompletedExceptionally() && reserveStock.get()) {
+                System.out.println("Rollback reserved stock");
                 //@TODO some sort of logging or retry for failure of rollback.
                 rollbackRStock(order);
             }
             if (!reservePayment.isCompletedExceptionally() && reservePayment.get()) {
+                System.out.println("Rollback reserved payment");
                 //@TODO reservePayment rollback
+                rollbackRPayment(order);
             }
         }
         return false;
@@ -251,12 +257,27 @@ public class OrderService {
         } catch (Exception e) {
             //This get should never throw an exception
             if (!bookStock.isCompletedExceptionally() && bookStock.get()) {
-                //@TODO bookStock rollback
+                //@TODO bookStock retry or logging
+                try {
+                    System.out.println("Retrying booking stock");
+                    retryBookStock(order);
+                } catch (RetryException | TimeoutException retryException) {
+                    System.out.println(retryException);
+                    //@TODO logging retry fail
+                    System.out.println("Book stock retry failed");
+                }
             }
             //This get should never throw an exception
             if (!bookPayment.isCompletedExceptionally() && bookPayment.get()) {
                 //@TODO some sort of logging or retry for failure of rollback.
-                cancelPayment(order);
+                try {
+                    System.out.println("Retrying booking payment");
+                    retryBookPayment(order);
+                } catch (RetryException | TimeoutException retryException) {
+                    System.out.println(retryException);
+                    //@TODO logging retry fail
+                    System.out.println("Book payment retry failed");
+                }
             }
         }
 
