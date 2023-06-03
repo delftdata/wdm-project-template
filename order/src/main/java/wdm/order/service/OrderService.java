@@ -37,7 +37,7 @@ public class OrderService {
     public float getItemPrice(Long item_id) throws Exception {
         String url = stockServiceUrl + "/find/" + item_id;
         try {
-            ResponseEntity<String> response = restTemplate.postForEntity(url, null, String.class);
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
             if (response.getStatusCodeValue() != 200) {
                 System.out.println("Error: " + response.getStatusCodeValue());
