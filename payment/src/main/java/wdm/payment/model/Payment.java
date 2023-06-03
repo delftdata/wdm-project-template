@@ -15,6 +15,8 @@ public class Payment {
     long orderId;
     float reserved_amount;
     float booked_amount;
+    @Version
+    private Long version;
 
     public Payment() {
     }
