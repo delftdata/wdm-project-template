@@ -20,6 +20,8 @@ public class Stock implements Serializable {
     long id;
     int qty;
     float price;
+    @Version
+    private Long version;
 
 //    @OneToMany(mappedBy = "item")
 //    private List<ReservedStock> reservedStockList = new ArrayList<>();
