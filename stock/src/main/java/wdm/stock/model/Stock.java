@@ -1,14 +1,11 @@
 package wdm.stock.model;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
 
 import jakarta.persistence.*;
 
@@ -18,7 +15,7 @@ public class Stock implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     long id;
-    int qty;
+    int stock;
     float price;
     @Version
     private Long version;
@@ -27,8 +24,8 @@ public class Stock implements Serializable {
 //    private List<ReservedStock> reservedStockList = new ArrayList<>();
 
 
-    public Stock(int qty, float price) {
-        this.qty = qty;
+    public Stock(int stock, float price) {
+        this.stock = stock;
         this.price = price;
     }
 
@@ -39,12 +36,12 @@ public class Stock implements Serializable {
         return id;
     }
 
-    public int getQty() {
-        return qty;
+    public int getStock() {
+        return stock;
     }
 
-    public void setQty(int qty) {
-        this.qty = qty;
+    public void setStock(int qty) {
+        this.stock = qty;
     }
 
     public float getPrice() {
@@ -59,7 +56,7 @@ public class Stock implements Serializable {
     public String toString() {
         return "Stock{" +
                 "id='" + id + '\'' +
-                ", qty=" + qty +
+                ", qty=" + stock +
                 ", price=" + price +
                 '}';
     }
