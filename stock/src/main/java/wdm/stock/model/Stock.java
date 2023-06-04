@@ -15,7 +15,7 @@ public class Stock implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     long id;
-    int stock;
+    int qty;
     float price;
     @Version
     private Long version;
@@ -24,8 +24,8 @@ public class Stock implements Serializable {
 //    private List<ReservedStock> reservedStockList = new ArrayList<>();
 
 
-    public Stock(int stock, float price) {
-        this.stock = stock;
+    public Stock(int qty, float price) {
+        this.qty = qty;
         this.price = price;
     }
 
@@ -37,11 +37,11 @@ public class Stock implements Serializable {
     }
 
     public int getStock() {
-        return stock;
+        return qty;
     }
 
     public void setStock(int qty) {
-        this.stock = qty;
+        this.qty = qty;
     }
 
     public float getPrice() {
@@ -56,7 +56,7 @@ public class Stock implements Serializable {
     public String toString() {
         return "Stock{" +
                 "id='" + id + '\'' +
-                ", qty=" + stock +
+                ", qty=" + qty +
                 ", price=" + price +
                 '}';
     }
