@@ -78,6 +78,8 @@ public class OrderController {
                 throw new RuntimeException(e);
             }
         }
+        tmp.setPaid(true);
+        repository.save(tmp);
         return Collections.singletonMap("checkout_succes", checkout);
     }
 
