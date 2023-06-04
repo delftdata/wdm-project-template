@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import wdm.order.model.Order;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -241,6 +242,35 @@ public class OrderService {
             }
         }
         return false;
+    }
+
+    public boolean checkStock(Order order) {
+        Boolean flag = true;
+        for(long x : order.getItems()){
+            int occ = Collections.frequency(order.getItems(), x);
+            String url = stockServiceUrl + "/find/" + x;
+            try {
+                ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+
+                if (response.getStatusCodeValue() != 200) {
+                    System.out.println("Error: " + response.getStatusCodeValue());
+                    throw new Exception();
+                }
+                else {
+                    //Handling response as json to ensure decoupling between order and stock.
+                    String stock = response.getBody();
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    JsonNode stockJson = objectMapper.readValue(stock, JsonNode.class);
+                    int qty = stockJson.get("stock").asInt();
+                    if(qty < occ) flag = false;
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+                return false;
+            }
+        }
+        return flag;
+
     }
 
     public boolean checkout(Order order) throws ExecutionException, InterruptedException {

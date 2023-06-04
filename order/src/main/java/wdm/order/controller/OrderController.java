@@ -2,6 +2,7 @@ package wdm.order.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import wdm.order.exception.CheckoutFailedException;
 import wdm.order.exception.OrderNotFoundException;
 import wdm.order.model.Order;
 import wdm.order.repository.OrderRepository;
@@ -60,27 +61,29 @@ public class OrderController {
 
     @PostMapping("/checkout/{order_id}")
     @ResponseStatus(value = HttpStatus.OK)
-    Map<String, Boolean> checkout(@PathVariable Long order_id) {
+    void checkout(@PathVariable Long order_id) {
         boolean reserved = false;
         boolean checkout = false;
         Order tmp = repository.findById(order_id).orElseThrow(()-> new OrderNotFoundException(order_id));
-        try {
-            //Exceptions are handled inside the .reserveout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
-            reserved = orderService.reserveOut(tmp);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        if (reserved) {
+        if(orderService.checkStock(tmp)){
             try {
-                checkout = orderService.checkout(tmp);
+                //Exceptions are handled inside the .reserveout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
+                reserved = orderService.reserveOut(tmp);
             } catch (Exception e) {
-                //Exceptions are handled inside the .checkout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
-                throw new RuntimeException(e);
+                throw new CheckoutFailedException();
             }
+            if (reserved) {
+                try {
+                    checkout = orderService.checkout(tmp);
+                } catch (Exception e) {
+                    //Exceptions are handled inside the .checkout. Only error that could come is from a .get that happens after a check that no error for that get is thrown.
+                    throw new CheckoutFailedException();
+                }
+            }
+            tmp.setPaid(true);
+            repository.save(tmp);
         }
-        tmp.setPaid(true);
-        repository.save(tmp);
-        return Collections.singletonMap("checkout_succes", checkout);
+        if (!checkout) throw new CheckoutFailedException();
     }
 
 
