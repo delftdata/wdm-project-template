@@ -69,4 +69,9 @@ public class PaymentService {
         return payment.getBooked_amount() > 0 && payment.getReserved_amount() == 0;
     }
 
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public boolean checkBooking(long user_id, long order_id) {
+        return paymentRepository.existsByUserIdAndOrderId(user_id, order_id);
+    }
+
 }

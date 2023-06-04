@@ -2,6 +2,7 @@ package wdm.stock.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import wdm.stock.exception.StockLimitReachedException;
 import wdm.stock.exception.StockNotFoundException;
 import wdm.stock.model.Stock;
 import wdm.stock.repository.ReservedStockRepository;
@@ -42,6 +43,7 @@ public class StockController {
     @ResponseStatus(value = HttpStatus.OK)
     void subtractStock(@PathVariable Long item_id, @PathVariable int amount){
         Stock tmp = stockRepository.findById(item_id).orElseThrow(()-> new StockNotFoundException(item_id));
+        if(amount > tmp.getStock()) throw new StockLimitReachedException(tmp.getStock(), amount);
         stockService.subtractStock(tmp, amount);
     }
 
