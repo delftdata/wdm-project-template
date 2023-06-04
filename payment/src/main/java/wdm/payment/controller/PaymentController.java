@@ -59,12 +59,6 @@ public class PaymentController {
         paymentService.reserveCredit(user_id, order_id, amount);
     }
 
-    @PostMapping("/book/{user_id}/{order_id}/{amount}")
-    @ResponseStatus(value = HttpStatus.OK)
-    void bookPayment(@PathVariable long user_id, @PathVariable long order_id, @PathVariable float amount){
-        paymentService.bookCredit(user_id, order_id, amount);
-    }
-
     @PostMapping("/pay/{user_id}/{order_id}/{amount}")
     @ResponseStatus(value = HttpStatus.OK)
     void payPayment(@PathVariable long user_id, @PathVariable long order_id, @PathVariable float amount){
