@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: order-db
+  name: order-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-db
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: order-db
+    spec:
+      containers:
+        - env:
+            - name: POSTGRES_DB
+              value: wdmorder
+            - name: POSTGRES_PASSWORD
+              value: ABC
+            - name: POSTGRES_USER
+              value: postgres
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: update
+          image: docker.io/library/postgres:latest
+          imagePullPolicy: IfNotPresent
+          name: order-db
+          ports:
+            - containerPort: 5432
+          resources: {}
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: order-db
+      restartPolicy: Always
+      volumes:
+        - name: order-db
+          persistentVolumeClaim:
+            claimName: order-db-claim0
+
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: order-db
+  name: order-db
+spec:
+  ports:
+    - name: "5432"
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: order-db
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app: order-db-claim0
+  name: order-db-claim0
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi

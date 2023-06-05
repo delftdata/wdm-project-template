@@ -1,6 +1,5 @@
 version: "3"
 services:
-
   gateway:
     image: nginx:latest
     volumes:
@@ -13,8 +12,15 @@ services:
     depends_on:
       - order-db
     ports:
-      - '5000:5000'
+      - "5000:5000"
     command: java -jar /app.jar
+    environment:
+      - GATEWAY_URL='http://gateway:80'
+      - PAYMENT_SERVICE_URL='http://payment-service:5001'
+      - STOCK_SERVICE_URL='http://stock-service:5002'
+      - DATABASE_URL='jdbc:postgresql://order-db:5432/wdmorder'
+      - DATABASE_USERNAME='postgres'
+      - DATABASE_PASS='123'
 
   order-db:
     image: postgres:latest
@@ -25,7 +31,7 @@ services:
       - POSTGRES_DB=wdmorder
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     ports:
-      - '5432:5432'
+      - "5432:5432"
     volumes:
       - /var/lib/postgresql/data
 
@@ -35,7 +41,12 @@ services:
       - payment-db
     command: java -jar /app.jar
     ports:
-      - '5001:5001'
+      - "5001:5001"
+    environment:
+      - GATEWAY_URL='http://gateway:80'
+      - DATABASE_URL='jdbc:postgresql://payment-db:5432/wdmpayment'
+      - DATABASE_USERNAME='postgres'
+      - DATABASE_PASS='123'
 
   payment-db:
     image: postgres:latest
@@ -46,7 +57,7 @@ services:
       - POSTGRES_DB=wdmpayment
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     ports:
-      - '5433:5432'
+      - "5433:5432"
     volumes:
       - /var/lib/postgresql/data
 
@@ -56,7 +67,11 @@ services:
       - stock-db
     command: java -jar /app.jar
     ports:
-      - '5002:5002'
+      - "5002:5002"
+    environment:
+      - DATABASE_URL='jdbc:postgresql://stock-db:5432/wdmstock'
+      - DATABASE_USERNAME='postgres'
+      - DATABASE_PASS='123'
 
   stock-db:
     image: postgres:latest
@@ -67,18 +82,6 @@ services:
       - POSTGRES_DB=wdmstock
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     ports:
-      - '5434:5432'
+      - "5434:5432"
     volumes:
       - /var/lib/postgresql/data
-#
-#  pgadmin:
-#    container_name: pgadmin
-#    image: dpage/pgadmin4
-#    environment:
-#      PGADMIN_DEFAULT_EMAIL: example@example.com
-#      PGADMIN_DEFAULT_PASSWORD: "password"
-#      PGADMIN_CONFIG_SERVER_MODE: 'False'
-#    volumes:
-#      - /var/lib/pgadmin
-#    ports:
-#      - "5431:80"

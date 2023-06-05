@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    io.kompose.service: payment-service
+  name: payment-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: payment-service
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        io.kompose.network/wdm-project-template-default: "true"
+        io.kompose.service: payment-service
+    spec:
+      containers:
+        - args:
+            - java
+            - -jar
+            - /app.jar
+          image: boomm61/wdm-payment:test
+          imagePullPolicy: IfNotPresent
+          name: payment-service
+          ports:
+            - containerPort: 5001
+          resources: {}
+          env:
+            - name: GATEWAY_URL
+              value: "http://gateway.default.svc.cluster.local:8000"
+            - name: DATABASE_URL
+              value: "jdbc:postgresql://payment-db.default.svc.cluster.local:5433/wdmpayment"
+            - name: DATABASE_USERNAME
+              value: "postgres"
+            - name: DATABASE_PASS
+              value: "ABC"
+
+      restartPolicy: Always
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    io.kompose.service: payment-service
+  name: payment-service
+spec:
+  ports:
+    - name: "5001"
+      port: 5001
+      targetPort: 5001
+  selector:
+    io.kompose.service: payment-service
+status:
+  loadBalancer: {}

@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.28.0 (HEAD)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: stock-db
+  name: stock-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: stock-db
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert
+        kompose.version: 1.28.0 (HEAD)
+      creationTimestamp: null
+      labels:
+        io.kompose.network/wdm-project-template-default: "true"
+        io.kompose.service: stock-db
+    spec:
+      containers:
+        - env:
+            - name: POSTGRES_DB
+              value: wdmstock
+            - name: POSTGRES_PASSWORD
+              value: ABC
+            - name: POSTGRES_USER
+              value: postgres
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: update
+          image: postgres:latest
+          imagePullPolicy: IfNotPresent
+          name: stock-db
+          ports:
+            - containerPort: 5432
+          resources: {}
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: stock-db-claim0
+      restartPolicy: Always
+      volumes:
+        - name: stock-db-claim0
+          persistentVolumeClaim:
+            claimName: stock-db-claim0
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.28.0 (HEAD)
+  creationTimestamp: null
+  labels:
+    io.kompose.service: stock-db
+  name: stock-db
+spec:
+  ports:
+    - name: "5434"
+      port: 5434
+      targetPort: 5432
+  selector:
+    io.kompose.service: stock-db
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  creationTimestamp: null
+  labels:
+    io.kompose.service: stock-db-claim0
+  name: stock-db-claim0
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 100Mi
+status: {}
