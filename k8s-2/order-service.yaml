@@ -21,7 +21,7 @@ spec:
             - java
             - -jar
             - /app.jar
-          image: boomm61/wdm-order:test
+          image: boomm61/wdm-order:latest
           imagePullPolicy: IfNotPresent
           name: order-service
           ports:
