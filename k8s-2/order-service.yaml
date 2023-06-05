@@ -2,19 +2,19 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    io.kompose.service: order-service
+    app: order-service
   name: order-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      io.kompose.service: order-service
+      app: order-service
   strategy: {}
   template:
     metadata:
       labels:
         io.kompose.network/wdm-project-template-default: "true"
-        io.kompose.service: order-service
+        app: order-service
     spec:
       containers:
         - args:
@@ -48,7 +48,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    io.kompose.service: order-service
+    app: order-service
   name: order-service
 spec:
   ports:
@@ -56,6 +56,6 @@ spec:
       port: 5000
       targetPort: 5000
   selector:
-    io.kompose.service: order-service
+    app: order-service
 status:
   loadBalancer: {}

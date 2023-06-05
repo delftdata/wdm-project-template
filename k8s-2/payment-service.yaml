@@ -2,19 +2,19 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    io.kompose.service: payment-service
+    app: payment-service
   name: payment-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      io.kompose.service: payment-service
+      app: payment-service
   strategy: {}
   template:
     metadata:
       labels:
         io.kompose.network/wdm-project-template-default: "true"
-        io.kompose.service: payment-service
+        app: payment-service
     spec:
       containers:
         - args:
@@ -44,7 +44,7 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    io.kompose.service: payment-service
+    app: payment-service
   name: payment-service
 spec:
   ports:
@@ -52,6 +52,6 @@ spec:
       port: 5001
       targetPort: 5001
   selector:
-    io.kompose.service: payment-service
+    app: payment-service
 status:
   loadBalancer: {}
