@@ -5,7 +5,7 @@ metadata:
     app: order-service
   name: order-service
 spec:
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app: order-service
@@ -22,7 +22,7 @@ spec:
             - -jar
             - /app.jar
           image: boomm61/wdm-order:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           name: order-service
           ports:
             - containerPort: 5000

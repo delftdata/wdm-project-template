@@ -5,7 +5,7 @@ metadata:
     app: stock-service
   name: stock-service
 spec:
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app: stock-service
@@ -22,7 +22,7 @@ spec:
             - -jar
             - /app.jar
           image: boomm61/wdm-stock:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           name: stock-service
           ports:
             - containerPort: 5002

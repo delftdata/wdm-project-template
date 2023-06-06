@@ -5,7 +5,7 @@ metadata:
     app: payment-service
   name: payment-service
 spec:
-  replicas: 1
+  replicas: 4
   selector:
     matchLabels:
       app: payment-service
@@ -22,7 +22,7 @@ spec:
             - -jar
             - /app.jar
           image: boomm61/wdm-payment:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           name: payment-service
           ports:
             - containerPort: 5001
