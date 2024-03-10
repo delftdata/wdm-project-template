@@ -8,7 +8,7 @@ class TestMicroservices(unittest.TestCase):
     def test_stock(self):
         # Test /stock/item/create/<price>
         item: dict = tu.create_item(5)
-        self.assertTrue('item_id' in item)
+        self.assertIn('item_id', item)
 
         item_id: str = item['item_id']
 
@@ -37,7 +37,7 @@ class TestMicroservices(unittest.TestCase):
     def test_payment(self):
         # Test /payment/pay/<user_id>/<order_id>
         user: dict = tu.create_user()
-        self.assertTrue('user_id' in user)
+        self.assertIn('user_id', user)
 
         user_id: str = user['user_id']
 
@@ -47,7 +47,7 @@ class TestMicroservices(unittest.TestCase):
 
         # add item to the stock service
         item: dict = tu.create_item(5)
-        self.assertTrue('item_id' in item)
+        self.assertIn('item_id', item)
 
         item_id: str = item['item_id']
 
@@ -56,7 +56,7 @@ class TestMicroservices(unittest.TestCase):
 
         # create order in the order service and add item to the order
         order: dict = tu.create_order(user_id)
-        self.assertTrue('order_id' in order)
+        self.assertIn('order_id', order)
 
         order_id: str = order['order_id']
 
@@ -77,26 +77,26 @@ class TestMicroservices(unittest.TestCase):
     def test_order(self):
         # Test /payment/pay/<user_id>/<order_id>
         user: dict = tu.create_user()
-        self.assertTrue('user_id' in user)
+        self.assertIn('user_id', user)
 
         user_id: str = user['user_id']
 
         # create order in the order service and add item to the order
         order: dict = tu.create_order(user_id)
-        self.assertTrue('order_id' in order)
+        self.assertIn('order_id', order)
 
         order_id: str = order['order_id']
 
         # add item to the stock service
         item1: dict = tu.create_item(5)
-        self.assertTrue('item_id' in item1)
+        self.assertIn('item_id', item1)
         item_id1: str = item1['item_id']
         add_stock_response = tu.add_stock(item_id1, 15)
         self.assertTrue(tu.status_code_is_success(add_stock_response))
 
         # add item to the stock service
         item2: dict = tu.create_item(5)
-        self.assertTrue('item_id' in item2)
+        self.assertIn('item_id', item2)
         item_id2: str = item2['item_id']
         add_stock_response = tu.add_stock(item_id2, 1)
         self.assertTrue(tu.status_code_is_success(add_stock_response))
