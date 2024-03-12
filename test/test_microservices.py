@@ -60,15 +60,15 @@ class TestMicroservices(unittest.TestCase):
 
         order_id: str = order['order_id']
 
-        add_item_response = tu.add_item_to_order(order_id, item_id)
+        add_item_response = tu.add_item_to_order(order_id, item_id, 1)
         self.assertTrue(tu.status_code_is_success(add_item_response))
 
-        add_item_response = tu.add_item_to_order(order_id, item_id)
+        add_item_response = tu.add_item_to_order(order_id, item_id, 1)
         self.assertTrue(tu.status_code_is_success(add_item_response))
-        add_item_response = tu.add_item_to_order(order_id, item_id)
+        add_item_response = tu.add_item_to_order(order_id, item_id, 1)
         self.assertTrue(tu.status_code_is_success(add_item_response))
 
-        payment_response = tu.payment_pay(user_id, order_id, 10)
+        payment_response = tu.payment_pay(user_id, 10)
         self.assertTrue(tu.status_code_is_success(payment_response))
 
         credit_after_payment: int = tu.find_user(user_id)['credit']
@@ -101,9 +101,9 @@ class TestMicroservices(unittest.TestCase):
         add_stock_response = tu.add_stock(item_id2, 1)
         self.assertTrue(tu.status_code_is_success(add_stock_response))
 
-        add_item_response = tu.add_item_to_order(order_id, item_id1)
+        add_item_response = tu.add_item_to_order(order_id, item_id1, 1)
         self.assertTrue(tu.status_code_is_success(add_item_response))
-        add_item_response = tu.add_item_to_order(order_id, item_id2)
+        add_item_response = tu.add_item_to_order(order_id, item_id2, 1)
         self.assertTrue(tu.status_code_is_success(add_item_response))
         subtract_stock_response = tu.subtract_stock(item_id2, 1)
         self.assertTrue(tu.status_code_is_success(subtract_stock_response))
@@ -132,8 +132,9 @@ class TestMicroservices(unittest.TestCase):
         stock: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock, 15)
 
-        checkout_response = tu.checkout_order(order_id).status_code
-        self.assertTrue(tu.status_code_is_success(checkout_response))
+        checkout_response = tu.checkout_order(order_id)
+        print(checkout_response.text)
+        self.assertTrue(tu.status_code_is_success(checkout_response.status_code))
 
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock_after_subtract, 14)
