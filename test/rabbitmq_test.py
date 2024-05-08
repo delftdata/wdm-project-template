@@ -1,8 +1,8 @@
 import unittest
 import pika
+import json
 
-
-class MyTestCase(unittest.TestCase):
+class RabbitMQExampleTest(unittest.TestCase):
 
     def test_produce_consume(self):
         conn = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
@@ -10,12 +10,26 @@ class MyTestCase(unittest.TestCase):
         channel.queue_declare(queue='hello')
         channel.basic_publish(exchange='',
                               routing_key='hello',
-                              body='Hello World!')
+                              body='Hello World!'.encode())
 
         result = channel.consume(queue='hello')
         message = next(result)
         conn.close()
         self.assertEqual(message[2].decode(), "Hello World!")
+
+    def test_json_example(self):
+        conn = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        message = {'id': 1, 'name': 'Hello World'}
+        channel = conn.channel()
+        channel.queue_declare(queue='json')
+        channel.basic_publish(exchange='',
+                              routing_key='json',
+                              body=json.dumps(message).encode())
+
+        result = channel.consume(queue='json')
+        res = json.loads(next(result)[2].decode())
+        conn.close()
+        self.assertEqual(res, message)
 
 
 if __name__ == '__main__':
