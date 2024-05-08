@@ -10,7 +10,7 @@ import requests
 
 from msgspec import msgpack, Struct
 from flask import Flask, jsonify, abort, Response
-
+import pika
 
 DB_ERROR_STR = "DB error"
 REQ_ERROR_STR = "Requests error"
@@ -23,6 +23,19 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
                               port=int(os.environ['REDIS_PORT']),
                               password=os.environ['REDIS_PASSWORD'],
                               db=int(os.environ['REDIS_DB']))
+
+
+def on_open(connection):
+    # Invoked when the connection is open
+    pass
+
+
+def on_close(connection, exception):
+    # Invoked when the connection is closed
+    connection.ioloop.stop()
+
+
+conn = pika.SelectConnection(on_open_callback=on_open, on_close_callback=on_close)
 
 
 def close_db_connection():
@@ -66,7 +79,6 @@ def create_order(user_id: str):
 
 @app.post('/batch_init/<n>/<n_items>/<n_users>/<item_price>')
 def batch_init_users(n: int, n_items: int, n_users: int, item_price: int):
-
     n = int(n)
     n_items = int(n_items)
     n_users = int(n_users)
@@ -79,7 +91,7 @@ def batch_init_users(n: int, n_items: int, n_users: int, item_price: int):
         value = OrderValue(paid=False,
                            items=[(f"{item1_id}", 1), (f"{item2_id}", 1)],
                            user_id=f"{user_id}",
-                           total_cost=2*item_price)
+                           total_cost=2 * item_price)
         return value
 
     kv_pairs: dict[str, bytes] = {f"{i}": msgpack.encode(generate_entry())

@@ -52,3 +52,18 @@ services:
   payment-db:
     image: redis:7.2-bookworm
     command: redis-server --requirepass redis --maxmemory 512mb
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3.13.2
+    ports:
+      - '4369:4369'
+      - '5671:5671'
+      - '5672:5672'
+      - '25672:25672'
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+
+volumes:
+  rabbitmq:
