@@ -8,10 +8,13 @@ class RabbitMQExampleTest(unittest.TestCase):
         conn = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
         channel = conn.channel()
         channel.queue_declare(queue='hello')
+
+        # Do in source service
         channel.basic_publish(exchange='',
                               routing_key='hello',
                               body='Hello World!'.encode())
 
+        # Do in destination service
         result = channel.consume(queue='hello')
         message = next(result)
         conn.close()
@@ -22,10 +25,13 @@ class RabbitMQExampleTest(unittest.TestCase):
         message = {'id': 1, 'name': 'Hello World'}
         channel = conn.channel()
         channel.queue_declare(queue='json')
+        
+        # Do in source service
         channel.basic_publish(exchange='',
                               routing_key='json',
                               body=json.dumps(message).encode())
 
+        # Do in destination service
         result = channel.consume(queue='json')
         res = json.loads(next(result)[2].decode())
         conn.close()
