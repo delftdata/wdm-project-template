@@ -6,7 +6,7 @@ import threading
 import json
 
 
-# Example function. You can put POST and GET requests in your functions to properly communicate with flask apps.
+# Example function. You can put RabbitMQ, POST and GET requests to communicate with apps.
 def hello_world(hello, world):
     print(f"{hello}, {world}")
 
