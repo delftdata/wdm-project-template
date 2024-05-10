@@ -26,6 +26,8 @@ services:
   order-db:
     image: redis:7.2-bookworm
     command: redis-server --requirepass redis --maxmemory 512mb
+    volumes:
+      - orderdb:/data
 
   stock-service:
     build: ./stock
@@ -39,6 +41,8 @@ services:
   stock-db:
     image: redis:7.2-bookworm
     command: redis-server --requirepass redis --maxmemory 512mb
+    volumes:
+      - stockdb:/data
 
   payment-service:
     build: ./payment
@@ -52,3 +56,10 @@ services:
   payment-db:
     image: redis:7.2-bookworm
     command: redis-server --requirepass redis --maxmemory 512mb
+    volumes:
+      - paymentdb:/data
+
+volumes:
+  orderdb:
+  stockdb:
+  paymentdb:
