@@ -64,6 +64,12 @@ services:
     volumes:
       - rabbitmq:/var/lib/rabbitmq
 
+  rabbitmq-consumer:
+    build: ./rabbitmq-consumer
+    image: rabbitmq-consumer:latest
+    depends_on:
+      - rabbitmq
+
 
 volumes:
   rabbitmq:

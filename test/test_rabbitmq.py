@@ -77,6 +77,19 @@ class RabbitMQExampleTest(unittest.TestCase):
         # The other account is also properly deducted
         self.assertEqual(accounts[2]['Balance'], 25)
 
+    def test_rabbitmq_consume_service(self):
+        message = {'function': 'hello_world', 'args': ('Hello', 'world!')}
+        # Service 1, Publisher (order)
+        conn = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        channel = conn.channel()
+        channel.queue_declare(queue='test')
+        channel.queue_purge(queue='test')  # Ensure queue is purged for a clean slate (not for production)
+        channel.basic_publish(exchange='',
+                              routing_key='test',
+                              body=json.dumps(message).encode())
+        # Now verify the rabbitmq-consumer service has printed 'Hello world!'
+        conn.close()
+
 
 if __name__ == '__main__':
     unittest.main()
