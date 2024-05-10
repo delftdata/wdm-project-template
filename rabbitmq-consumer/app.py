@@ -18,7 +18,14 @@ def process(message: dict):
 
 
 def consume_queue(queue: str):
-    conn = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
+    while True:
+        try:
+            conn = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
+        except pika.exceptions.AMQPConnectionError:
+            print(f"Retrying connection for queue {queue}...")
+            time.sleep(5)
+        else:
+            break
     channel = conn.channel()
     channel.queue_declare(queue=queue)
     for method, properties, body in channel.consume(queue=queue):
@@ -34,5 +41,8 @@ if __name__ == '__main__':
         threads[q].start()
 
     while True:
-        print(threads)
+        # Restart if heartbeat stopped
+        for q, t in threads.items():
+            if not t.is_alive():
+                t.start()
         time.sleep(60)
