@@ -29,8 +29,9 @@ def consume_queue(queue: str):
     channel = conn.channel()
     channel.queue_declare(queue=queue)
     for method, properties, body in channel.consume(queue=queue, inactivity_timeout=120):
-        res = json.loads(body.decode())
-        process(res)
+        if body:
+            res = json.loads(body.decode())
+            process(res)
 
 
 if __name__ == '__main__':
