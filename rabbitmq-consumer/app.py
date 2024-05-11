@@ -28,7 +28,7 @@ def consume_queue(queue: str):
             break
     channel = conn.channel()
     channel.queue_declare(queue=queue)
-    for method, properties, body in channel.consume(queue=queue):
+    for method, properties, body in channel.consume(queue=queue, inactivity_timeout=120):
         res = json.loads(body.decode())
         process(res)
 
@@ -45,4 +45,5 @@ if __name__ == '__main__':
         for q, t in threads.items():
             if not t.is_alive():
                 t.start()
+
         time.sleep(60)
