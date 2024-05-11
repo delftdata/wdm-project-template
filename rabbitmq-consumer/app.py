@@ -33,6 +33,9 @@ def consume_queue(queue: str):
             res = json.loads(body.decode())
             process(res)
 
+            # We signal that the message is received and processed, rabbitMQ will now remove it from the queue
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+
 
 if __name__ == '__main__':
     queues = ['payment', 'order', 'stock', 'test']
