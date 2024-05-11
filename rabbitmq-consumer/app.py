@@ -1,9 +1,7 @@
 import logging
 import time
-
-import pika
 import threading
-import json
+from rabbitMQConsumer import RabbitMQConsumer
 
 
 # Example function. You can put RabbitMQ, POST and GET requests to communicate with apps.
@@ -11,37 +9,13 @@ def hello_world(hello, world):
     print(f"{hello}, {world}")
 
 
-def process(message: dict):
-    if 'function' not in message.keys():
-        return
-    globals()[message['function']](*message['args'])
-
-
-def consume_queue(queue: str):
-    while True:
-        try:
-            conn = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
-        except pika.exceptions.AMQPConnectionError:
-            print(f"Retrying connection for queue {queue}...")
-            time.sleep(5)
-        else:
-            break
-    channel = conn.channel()
-    channel.queue_declare(queue=queue)
-    for method, properties, body in channel.consume(queue=queue, inactivity_timeout=120):
-        if body:
-            res = json.loads(body.decode())
-            process(res)
-
-            # We signal that the message is received and processed, rabbitMQ will now remove it from the queue
-            channel.basic_ack(delivery_tag=method.delivery_tag)
-
+consumer = RabbitMQConsumer()
 
 if __name__ == '__main__':
     queues = ['payment', 'order', 'stock', 'test']
     threads = {}
     for q in queues:
-        threads[q] = threading.Thread(target=consume_queue, args=(q,), daemon=True)
+        threads[q] = threading.Thread(target=consumer.consume_queue, args=(q, globals()), daemon=True)
         threads[q].start()
 
     while True:
@@ -51,3 +25,4 @@ if __name__ == '__main__':
                 t.start()
 
         time.sleep(60)
+
