@@ -45,23 +45,23 @@ class RabbitMQExampleTest(unittest.TestCase):
         message_1 = {'id': 1, 'type': 'deduct', 'Amount': 10}
         message_2 = {'id': 2, 'type': 'deduct', 'Amount': 25}
         channel = conn.channel()
-        channel.queue_declare(queue='payment')
-        channel.queue_purge(queue='payment')  # Ensure queue is purged for a clean slate (not for production)
+        channel.queue_declare(queue='payment_test')
+        channel.queue_purge(queue='payment_test')  # Ensure queue is purged for a clean slate (not for production)
         channel.basic_publish(exchange='',
-                              routing_key='payment',
+                              routing_key='payment_test',
                               body=json.dumps(message_1).encode())
         channel.basic_publish(exchange='',
-                              routing_key='payment',
+                              routing_key='payment_test',
                               body=json.dumps(message_2).encode())
 
         # Service 2, Consumer (payment)
         conn = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
         channel = conn.channel()
-        channel.queue_declare(queue='payment')
+        channel.queue_declare(queue='payment_test')
         accounts = {1: {'Balance': 25}, 2: {'Balance': 50}}
         i = 0
         # (this loop is infinite and waits for messages)
-        for method, properties, body in channel.consume(queue='payment'):
+        for method, properties, body in channel.consume(queue='payment_test'):
             res = json.loads(body.decode())
 
             # Stop early if we have received our two messages. Example action for processing
