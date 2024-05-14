@@ -59,7 +59,26 @@ services:
     volumes:
       - paymentdb:/data
 
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3.13.2
+    ports:
+      - '4369:4369'
+      - '5671:5671'
+      - '5672:5672'
+      - '25672:25672'
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+  rabbitmq-consumer:
+    build: ./rabbitmq-consumer
+    image: rabbitmq-consumer:latest
+    depends_on:
+      - rabbitmq
+
+
 volumes:
+  rabbitmq:
   orderdb:
   stockdb:
   paymentdb:
