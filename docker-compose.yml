@@ -61,11 +61,12 @@ services:
 
   rabbitmq:
     container_name: rabbitmq
-    image: rabbitmq:3.13.2
+    image: rabbitmq:3.13.2-management
     ports:
       - '4369:4369'
       - '5671:5671'
       - '5672:5672'
+      - '15672:15672'  # Port for accessing the management UI
       - '25672:25672'
     volumes:
       - rabbitmq:/var/lib/rabbitmq
