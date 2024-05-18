@@ -1,30 +1,28 @@
 import asyncio
 import contextlib
 import json
-from typing import (Any, Callable, Coroutine, List, MutableMapping, ParamSpec,
-                    TypeVar)
+from typing import Any, Callable, Coroutine, List, MutableMapping, ParamSpec, TypeVar
 from uuid import uuid4
 
 from aio_pika import Message, connect_robust
 from aio_pika.abc import AbstractIncomingMessage
+from pydantic import BaseModel
 
 from order.db import Session
 from order.model import AMQPMessage
-from order.services import (create_order,update_order, order_details_by_order_ref_no, Order)
+from order.services import create_order, update_order, order_details_by_order_ref_no
 
 P = ParamSpec('P')
 T = TypeVar('T')
 
 
 class SagaReplyHandler:
-
     reply_status: str | None
     action: Coroutine
     is_compensation: bool = False
 
     def __init__(
-        self, reply_status: str, action: Coroutine,
-        is_compensation: bool = False
+        self, reply_status: str, action: Coroutine, is_compensation: bool = False
     ) -> None:
         self.reply_status = reply_status
         self.action = action
@@ -43,7 +41,7 @@ class SagaRPC:
     async def connect(self) -> "SagaRPC":
         try:
             self.connection = await connect_robust(
-                settings.RABBITMQ_BROKER_URL, loop=self.loop,
+                'amqp://guest:guest@localhost/', loop=self.loop,
             )
             self.channel = await self.connection.channel()
 
@@ -138,7 +136,7 @@ class SagaRPC:
 
 class CreateOrderRequestSaga(SagaRPC):
 
-    data: Order = None
+    data: AMQPMessage = None
     order_uuid: str = None
 
     def __init__(self, order_uuid: str) -> None:
@@ -190,24 +188,24 @@ class CreateOrderRequestSaga(SagaRPC):
         ]
 
     async def create_order(self) -> bool:
-        with Session() as session:
+        async with Session() as session:
             self.data = await create_order(session, self.order_uuid)
             return self.data.id is not None
 
     async def completed_order(self) -> bool:
-        with Session() as session:
-            order = await order_details_by_order_ref_no(session, self.data.order_ref_no)
+        async with Session() as session:
+            order = await order_details_by_order_ref_no(session, self.data.content.order_ref_no)
             order.status = 'completed'
 
             # Updated data
             self.data = await update_order(session, order)
-            return self.data.status == 'completed'
+            return self.data.content.status == 'completed'
 
     async def failed_order(self) -> bool:
-        with Session() as session:
-            order = await order_details_by_order_ref_no(session, self.data.order_ref_no)
+        async with Session() as session:
+            order = await order_details_by_order_ref_no(session, self.data.content.order_ref_no)
             order.status = 'failed'
 
             # Updated data
             self.data = await update_order(session, order)
-            return self.data.status == 'failed'
+            return self.data.content.status == 'failed'
