@@ -1,6 +1,16 @@
 version: "3"
 services:
-
+  
+  so-rabbit:
+    image: rabbitmq:3.9.15-management-alpine
+    restart: unless-stopped
+    env_file:
+      - env/rabbitmq.env
+    ports:
+      - '15671:15671'
+    expose:
+      - '5671'
+  
   gateway:
     image: nginx:1.25-bookworm
     volumes:
@@ -22,6 +32,7 @@ services:
       - env/order_redis.env
     depends_on:
       - order-db
+      - so-rabbit
 
   order-db:
     image: redis:7.2-bookworm
@@ -35,6 +46,7 @@ services:
       - env/stock_redis.env
     depends_on:
       - stock-db
+      - so-rabbit
 
   stock-db:
     image: redis:7.2-bookworm
@@ -48,6 +60,7 @@ services:
       - env/payment_redis.env
     depends_on:
       - payment-db
+      - so-rabbit
 
   payment-db:
     image: redis:7.2-bookworm
