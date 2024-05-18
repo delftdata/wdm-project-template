@@ -4,6 +4,8 @@ import atexit
 import random
 import uuid
 from collections import defaultdict
+import time
+import json
 
 import redis
 import requests
@@ -24,19 +26,22 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
                               password=os.environ['REDIS_PASSWORD'],
                               db=int(os.environ['REDIS_DB']))
 
+def create_connection():
+    retries = 5
+    while retries > 0:
+        try:
+            params = pika.ConnectionParameters('rabbitmq')
+            connection = pika.BlockingConnection(params)
+            channel = connection.channel()
+            channel.queue_declare(queue='main')
+            return connection, channel
+        except pika.exceptions.AMQPConnectionError as e:
+            print(f"Connection failed: {e}, retrying...")
+            time.sleep(5)
+            retries -= 1
+    raise Exception("Failed to connect to RabbitMQ after several attempts")
 
-def on_open(connection):
-    # Invoked when the connection is open
-    pass
-
-
-def on_close(connection, exception):
-    # Invoked when the connection is closed
-    connection.ioloop.stop()
-
-
-conn = pika.SelectConnection(on_open_callback=on_open, on_close_callback=on_close)
-
+connection, channel = create_connection()
 
 def close_db_connection():
     db.close()
@@ -136,21 +141,38 @@ def send_get_request(url: str):
 
 
 @app.post('/addItem/<order_id>/<item_id>/<quantity>')
-def add_item(order_id: str, item_id: str, quantity: int):
-    order_entry: OrderValue = get_order_from_db(order_id)
-    item_reply = send_get_request(f"{GATEWAY_URL}/stock/find/{item_id}")
-    if item_reply.status_code != 200:
-        # Request failed because item does not exist
-        abort(400, f"Item: {item_id} does not exist!")
-    item_json: dict = item_reply.json()
-    order_entry.items.append((item_id, int(quantity)))
-    order_entry.total_cost += int(quantity) * item_json["price"]
+def add_item_request(order_id: str, item_id: str, quantity: int):
     try:
-        db.set(order_id, msgpack.encode(order_entry))
-    except redis.exceptions.RedisError:
-        return abort(400, DB_ERROR_STR)
-    return Response(f"Item: {item_id} added to: {order_id} price updated to: {order_entry.total_cost}",
-                    status=200)
+        message = json.dumps({
+            "function": "handle_add_item",
+            "args": [order_id, item_id, quantity]
+        })
+        channel.basic_publish(exchange='', routing_key='main', body=message)
+        return jsonify({"success": "Item addition request sent"}), 200
+    except Exception as e:
+        return jsonify({"error": "Failed to add item", "details": str(e)}), 500
+
+@app.post('/addItemProcess/<order_id>/<item_id>/<quantity>/<price>')
+def add_item_process(order_id: str, item_id: str, quantity: int, price: int):
+    try:
+        quantity = int(quantity)
+        price = int(price)
+    
+        order_entry: OrderValue = get_order_from_db(order_id)
+        if not order_entry:
+            return jsonify({"error": f"Order {order_id} not found"}), 404
+
+        order_entry.items.append((item_id, quantity))
+        order_entry.total_cost += quantity * price
+
+        try:
+            db.set(order_id, msgpack.encode(order_entry))
+        except redis.exceptions.RedisError:
+            return abort(400, DB_ERROR_STR)
+        return Response(f"Item: {item_id} added to: {order_id}, price updated to: {order_entry.total_cost}", status=200)
+    
+    except Exception as e:
+        return jsonify({"error": "Failed to add item", "details": str(e)}), 500
 
 
 def rollback_stock(removed_items: list[tuple[str, int]]):
