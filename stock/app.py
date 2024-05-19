@@ -80,15 +80,9 @@ async def find_item(item_id: str):
 async def add_stock(item_id: str, amount: int):
     try:
         item_entry: StockValue = await get_item(item_id)
-    except RedisDBError:
-        return abort(400, DB_ERROR_STR)
-    except ItemNotFoundError:
-        return abort(400, f"Item not found!")
-    # update stock, serialize and update database
-    item_entry.stock += int(amount)
-    try:
+        # update stock, serialize and update database
+        item_entry.stock += int(amount)
         await add_amount(item_id, amount)
-        # db.set(item_id, msgpack.encode(item_entry))
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
     except ItemNotFoundError:
@@ -100,21 +94,13 @@ async def add_stock(item_id: str, amount: int):
 async def remove_stock(item_id: str, amount: int):
     try:
         item_entry: StockValue = await get_item(item_id)
-    except RedisDBError:
-        return abort(400, DB_ERROR_STR)
-    except ItemNotFoundError:
-        return abort(400, f"Item not found!")
-    # update stock, serialize and update database
-    # item_entry.stock -= int(amount)
-    # app.logger.debug(f"Item: {item_id} stock updated to: {item_entry.stock}")
-    # if item_entry.stock < 0:
-    #     abort(400, f"Item: {item_id} stock cannot get reduced below zero!")
-    try:
         await remove_amount(item_id, amount)
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
     except InsufficientStockError:
         return abort(400, f"Insufficient funds!")
+    except ItemNotFoundError:
+        return abort(400, f"Item not found!")
     return Response(f"Item: {item_id} stock updated to: {item_entry.stock}", status=200)
 
 
