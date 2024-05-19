@@ -4,6 +4,9 @@ import atexit
 import random
 import uuid
 from collections import defaultdict
+import threading
+import time
+import json
 
 import redis
 import requests
@@ -25,17 +28,55 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
                               db=int(os.environ['REDIS_DB']))
 
 
-def on_open(connection):
-    # Invoked when the connection is open
-    pass
+class Publisher(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daemon = True
+        self.is_running = True
+        self.name = "Publisher"
+        self.queue = "main"
+
+        parameters = pika.ConnectionParameters("rabbitmq", )
+        self.connection = pika.BlockingConnection(parameters)
+        self.channel = self.connection.channel()
+        self.channel.queue_declare(queue=self.queue, durable = True)
+
+    def run(self):
+        while self.is_running:
+            self.connection.process_data_events(time_limit=1)
+
+    def _publish(self, message):
+        self.channel.basic_publish("", self.queue, body=message.encode())
+
+    def publish(self, message):
+        self.connection.add_callback_threadsafe(lambda: self._publish(message))
+
+    def stop(self):
+        print("Stopping...")
+        self.is_running = False
+        # Wait until all the data events have been processed
+        self.connection.process_data_events(time_limit=1)
+        if self.connection.is_open:
+            self.connection.close()
+        print("Stopped")
 
 
-def on_close(connection, exception):
-    # Invoked when the connection is closed
-    connection.ioloop.stop()
+def create_connection():
+    retries = 5
+    while retries > 0:
+        try:
+            publisher = Publisher()
+            publisher.start()
+            return publisher
+        except pika.exceptions.AMQPConnectionError as e:
+            print(f"Connection failed: {e}, retrying...")
+            time.sleep(5)
+            retries -= 1
+    raise Exception("Failed to connect to RabbitMQ after several attempts")
 
 
-conn = pika.SelectConnection(on_open_callback=on_open, on_close_callback=on_close)
+# Initialize connection
+publisher = create_connection()
 
 
 def close_db_connection():
@@ -136,21 +177,40 @@ def send_get_request(url: str):
 
 
 @app.post('/addItem/<order_id>/<item_id>/<quantity>')
-def add_item(order_id: str, item_id: str, quantity: int):
-    order_entry: OrderValue = get_order_from_db(order_id)
-    item_reply = send_get_request(f"{GATEWAY_URL}/stock/find/{item_id}")
-    if item_reply.status_code != 200:
-        # Request failed because item does not exist
-        abort(400, f"Item: {item_id} does not exist!")
-    item_json: dict = item_reply.json()
-    order_entry.items.append((item_id, int(quantity)))
-    order_entry.total_cost += int(quantity) * item_json["price"]
+def add_item_request(order_id: str, item_id: str, quantity: int):
     try:
-        db.set(order_id, msgpack.encode(order_entry))
-    except redis.exceptions.RedisError:
-        return abort(400, DB_ERROR_STR)
-    return Response(f"Item: {item_id} added to: {order_id} price updated to: {order_entry.total_cost}",
-                    status=200)
+        message = json.dumps({
+            "function": "handle_add_item",
+            "args": [order_id, item_id, quantity]
+        })
+        publisher.publish(message)
+        return jsonify({"success": "Item addition request sent"}), 200
+    except Exception as e:
+        print(e)
+        return jsonify({"error": "Failed to add item", "details": str(e)}), 500
+
+
+@app.post('/addItemProcess/<order_id>/<item_id>/<quantity>/<price>')
+def add_item_process(order_id: str, item_id: str, quantity: int, price: int):
+    try:
+        quantity = int(quantity)
+        price = int(price)
+
+        order_entry: OrderValue = get_order_from_db(order_id)
+        if not order_entry:
+            return jsonify({"error": f"Order {order_id} not found"}), 404
+
+        order_entry.items.append((item_id, quantity))
+        order_entry.total_cost += quantity * price
+
+        try:
+            db.set(order_id, msgpack.encode(order_entry))
+        except redis.exceptions.RedisError:
+            return abort(400, DB_ERROR_STR)
+        return Response(f"Item: {item_id} added to: {order_id}, price updated to: {order_entry.total_cost}", status=200)
+
+    except Exception as e:
+        return jsonify({"error": "Failed to add item", "details": str(e)}), 500
 
 
 def rollback_stock(removed_items: list[tuple[str, int]]):
@@ -159,33 +219,41 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 
 
 @app.post('/checkout/<order_id>')
-def checkout(order_id: str):
-    app.logger.debug(f"Checking out {order_id}")
+def checkout_request(order_id: str):
+    try:
+        # # Get Order
+        # order_entry: OrderValue = get_order_from_db(order_id)
+
+        # Create Message
+        message = json.dumps({
+            "function": "handle_checkout",
+            "args": (order_id, )
+        })
+
+        # Publish Message
+        publisher.publish(message)
+
+        return jsonify({"success": "Checkout request sent"}), 202
+    except Exception as e:
+        return jsonify({"error": "Failed to initiate checkout", "details": str(e)}), 500
+
+
+@app.post('/checkoutProcess/<order_id>')
+def checkout_process(order_id: str):
+    app.logger.debug(f"Saving order {order_id}")
+
+    # Get Order
     order_entry: OrderValue = get_order_from_db(order_id)
-    # get the quantity per item
-    items_quantities: dict[str, int] = defaultdict(int)
-    for item_id, quantity in order_entry.items:
-        items_quantities[item_id] += quantity
-    # The removed items will contain the items that we already have successfully subtracted stock from
-    # for rollback purposes.
-    removed_items: list[tuple[str, int]] = []
-    for item_id, quantity in items_quantities.items():
-        stock_reply = send_post_request(f"{GATEWAY_URL}/stock/subtract/{item_id}/{quantity}")
-        if stock_reply.status_code != 200:
-            # If one item does not have enough stock we need to rollback
-            rollback_stock(removed_items)
-            abort(400, f'Out of stock on item_id: {item_id}')
-        removed_items.append((item_id, quantity))
-    user_reply = send_post_request(f"{GATEWAY_URL}/payment/pay/{order_entry.user_id}/{order_entry.total_cost}")
-    if user_reply.status_code != 200:
-        # If the user does not have enough credit we need to rollback all the item stock subtractions
-        rollback_stock(removed_items)
-        abort(400, "User out of credit")
+
+    # Update Order
     order_entry.paid = True
+
+    # Save Order
     try:
         db.set(order_id, msgpack.encode(order_entry))
     except redis.exceptions.RedisError:
-        return abort(400, DB_ERROR_STR)
+        return abort(500, DB_ERROR_STR)
+
     app.logger.debug("Checkout successful")
     return Response("Checkout successful", status=200)
 

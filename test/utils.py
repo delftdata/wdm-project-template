@@ -49,7 +49,8 @@ def create_order(user_id: str) -> dict:
 
 
 def add_item_to_order(order_id: str, item_id: str, quantity: int) -> int:
-    return requests.post(f"{ORDER_URL}/orders/addItem/{order_id}/{item_id}/{quantity}").status_code
+    response = requests.post(f"{ORDER_URL}/orders/addItem/{order_id}/{item_id}/{quantity}")
+    return response.status_code
 
 
 def find_order(order_id: str) -> dict:

@@ -1,6 +1,7 @@
 import unittest
 
 import utils as tu
+import time
 
 
 class TestMicroservices(unittest.TestCase):
@@ -107,10 +108,12 @@ class TestMicroservices(unittest.TestCase):
         self.assertTrue(tu.status_code_is_success(add_item_response))
         subtract_stock_response = tu.subtract_stock(item_id2, 1)
         self.assertTrue(tu.status_code_is_success(subtract_stock_response))
+        stock_after_subtract: int = tu.find_item(item_id1)['stock']
+        self.assertEqual(stock_after_subtract, 15)
 
         checkout_response = tu.checkout_order(order_id).status_code
-        self.assertTrue(tu.status_code_is_failure(checkout_response))
-
+        # self.assertTrue(tu.status_code_is_failure(checkout_response)) failure now mediated by rabbitmq-consumer
+        time.sleep(0.01)
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock_after_subtract, 15)
 
@@ -121,20 +124,19 @@ class TestMicroservices(unittest.TestCase):
         self.assertEqual(credit_after_payment, 0)
 
         checkout_response = tu.checkout_order(order_id).status_code
-        self.assertTrue(tu.status_code_is_failure(checkout_response))
-
+        # self.assertTrue(tu.status_code_is_failure(checkout_response)) failure now mediated by rabbitmq-consumer
+        time.sleep(0.01)
         add_credit_response = tu.add_credit_to_user(user_id, 15)
         self.assertTrue(tu.status_code_is_success(int(add_credit_response)))
 
         credit: int = tu.find_user(user_id)['credit']
         self.assertEqual(credit, 15)
-
         stock: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock, 15)
 
         checkout_response = tu.checkout_order(order_id)
-        print(checkout_response.text)
         self.assertTrue(tu.status_code_is_success(checkout_response.status_code))
+        time.sleep(0.01)
 
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock_after_subtract, 14)
