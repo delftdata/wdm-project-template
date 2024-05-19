@@ -23,9 +23,9 @@ async def get_item_from_db(item_id: str) -> StockValue | None:
     try:
         entry: bytes = await get_item(item_id)
     except RedisDBError:
-        abort(400, DB_ERROR_STR)
+        raise RedisDBError
     except ItemNotFoundError:
-        abort(400, f"Item: {item_id} not found!")
+        raise ItemNotFoundError
     # deserialize data if it exists else return null
     # entry: StockValue | None = msgpack.decode(entry, type=StockValue) if entry else None
     # if entry is None:
@@ -62,7 +62,12 @@ async def batch_init_users(n: int, starting_stock: int, item_price: int):
 
 @app.get('/find/<item_id>')
 async def find_item(item_id: str):
-    item_entry: StockValue = await get_item_from_db(item_id)
+    try:
+        item_entry: StockValue = await get_item(item_id)
+    except RedisDBError:
+        return abort(400, DB_ERROR_STR)
+    except ItemNotFoundError:
+        return abort(400, f"Item not found!")
     return jsonify(
         {
             "stock": item_entry.stock,
@@ -73,7 +78,12 @@ async def find_item(item_id: str):
 
 @app.post('/add/<item_id>/<amount>')
 async def add_stock(item_id: str, amount: int):
-    item_entry: StockValue = await get_item_from_db(item_id)
+    try:
+        item_entry: StockValue = await get_item(item_id)
+    except RedisDBError:
+        return abort(400, DB_ERROR_STR)
+    except ItemNotFoundError:
+        return abort(400, f"Item not found!")
     # update stock, serialize and update database
     item_entry.stock += int(amount)
     try:
@@ -81,12 +91,19 @@ async def add_stock(item_id: str, amount: int):
         # db.set(item_id, msgpack.encode(item_entry))
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
+    except ItemNotFoundError:
+        return abort(400, f"Item not found!")
     return Response(f"Item: {item_id} stock updated to: {item_entry.stock}", status=200)
 
 
 @app.post('/subtract/<item_id>/<amount>')
 async def remove_stock(item_id: str, amount: int):
-    item_entry: StockValue = await get_item_from_db(item_id)
+    try:
+        item_entry: StockValue = await get_item(item_id)
+    except RedisDBError:
+        return abort(400, DB_ERROR_STR)
+    except ItemNotFoundError:
+        return abort(400, f"Item not found!")
     # update stock, serialize and update database
     # item_entry.stock -= int(amount)
     # app.logger.debug(f"Item: {item_id} stock updated to: {item_entry.stock}")
