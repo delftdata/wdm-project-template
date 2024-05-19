@@ -53,7 +53,7 @@ async def get_order_from_db(order_id: str) -> OrderValue | None:
 @app.post('/create/<user_id>')
 async def create_order(user_id: str):
     try:
-        key = create_order_db(user_id)
+        key = await create_order_db(user_id)
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
     return jsonify({'order_id': key})

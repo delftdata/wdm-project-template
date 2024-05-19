@@ -69,7 +69,7 @@ class OrderValue(Struct):
 
 async def get_order_by_id_db(order_id: str) :
     try:
-        entry: bytes = await db.get(order_id)
+        entry: bytes = db.get(order_id)
     except redis.exceptions.RedisError:
         raise RedisDBError(Exception)
     entry: OrderValue | None = msgpack.decode(entry, type=OrderValue) if entry else None
@@ -80,19 +80,19 @@ async def create_order_db(user_id: str):
     key = str(uuid.uuid4())
     value = msgpack.encode(OrderValue(paid=False, items=[], user_id=user_id, total_cost=0))
     try:
-        await db.set(key, value)
+        db.set(key, value)
     except redis.exceptions.RedisError:
         raise RedisDBError(Exception)
     return key
 
 async def batch_init_users_db(kv_pairs):
     try:
-        await db.mset(kv_pairs)
+        db.mset(kv_pairs)
     except redis.exceptions.RedisError:
         raise RedisDBError(Exception)
     
 async def add_item_db(order_id, order_entry):
     try:
-        await db.set(order_id, msgpack.encode(order_entry))
+        db.set(order_id, msgpack.encode(order_entry))
     except redis.exceptions.RedisError:
         raise RedisDBError(Exception)
