@@ -1,4 +1,5 @@
 import asyncio
+import os
 from functools import partial
 from typing import Callable
 
@@ -6,9 +7,7 @@ import aio_pika
 import simplejson as json
 from aio_pika import IncomingMessage, Message
 
-from app import settings
-from app.models import AMQPMessage
-
+from model import AMQPMessage
 
 class AMQPClient:
 
@@ -18,7 +17,7 @@ class AMQPClient:
         '''
 
         self.connection = await aio_pika.connect_robust(
-            settings.RABBITMQ_BROKER_URL, loop=asyncio.get_event_loop()
+            os.environ['RABBITMQ_BROKER_URL'], loop=asyncio.get_event_loop()
         )
 
         # Creating channel
