@@ -4,6 +4,20 @@ import unittest
 import utils as tu
 import time
 
+class TestMicroservicesBase(unittest.TestCase):
+    def setUp(self):
+        # Create the test user
+        self.user: dict = tu.create_user()
+        self.assertIn('user_id', self.user)
+
+        self.user_id: str = self.user['user_id']
+
+        # Add funds to user
+        self.add_funds_to_user_response: int = tu.add_credit_to_user(self.user_id, 10)
+        self.assertTrue(tu.status_code_is_success(self.add_funds_to_user_response))
+
+    def tearDown(self):
+        pass
 
 class TestMicroservices(unittest.TestCase):
 
@@ -143,7 +157,7 @@ class TestMicroservices(unittest.TestCase):
         time.sleep(0.01)
 
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
-        self.assertEqual(stock_after_subtract, 13) # previously 14
+        self.assertEqual(stock_after_subtract, 14)
 
         credit: int = tu.find_user(user_id)['credit']
         self.assertEqual(credit, 5)
@@ -190,6 +204,93 @@ class TestMicroservices(unittest.TestCase):
         checkout_request_status = tu.find_request_status(checkout_request_id).json()
         self.assertIn(checkout_request_status['status'], ['Pending', 'Processed'])
 
+
+class TestOrderService(TestMicroservicesBase):
+    def setUp(self):
+        super().setUp()
+
+        # create order in the order service and add item to the order
+        self.order: dict = tu.create_order(self.user_id)
+        self.assertIn('order_id', self.order)
+
+        self.order_id: str = self.order['order_id']
+
+    def tearDown(self):
+        pass
+
+    def test_orderUnkownItem(self):
+        self.add_item_response1 = tu.add_item_to_order(self.order_id, "this-is-not-an-item-id", 1)
+        self.assertTrue(tu.status_code_is_success(self.add_item_response1))
+        # NB: Should eventually return false or rollback by the rabbitmq-consumer
+
+class TestOrderServiceMore(TestOrderService):
+    def setUp(self):
+        super().setUp()
+        # add item to the stock service
+        self.item1: dict = tu.create_item(5)
+        self.assertIn('item_id', self.item1)
+        self.item_id1: str = self.item1['item_id']
+        self.add_stock_response1 = tu.add_stock(self.item_id1, 15)
+        self.assertTrue(tu.status_code_is_success(self.add_stock_response1))
+
+        # add item to the stock service
+        self.item2: dict = tu.create_item(5)
+        self.assertIn('item_id', self.item2)
+        self.item_id2: str = self.item2['item_id']
+        self.add_stock_response2 = tu.add_stock(self.item_id2, 1)
+        self.assertTrue(tu.status_code_is_success(self.add_stock_response2))
+
+    def tearDown(self):
+        pass
+        super().tearDown()
+
+    def test_orderTooManyItems(self):
+        # add items to order
+        self.add_item_response1 = tu.add_item_to_order(self.order_id, self.item_id1, 16)
+        self.assertTrue(tu.status_code_is_success(self.add_item_response1))
+        # NB: Should eventually return false or rollback by the rabbitmq-consumer
+
+        # Try unsuccessful checkout
+        self.checkout_response = tu.checkout_order(self.order_id).status_code
+        self.assertTrue(tu.status_code_is_success(self.checkout_response))
+        # NB: Should eventually return false or rollback by the rabbitmq-consumer
+
+    def test_sufficientStock(self):
+        # add items to order
+        self.add_item_response1 = tu.add_item_to_order(self.order_id, self.item_id1, 1)
+        self.assertTrue(tu.status_code_is_success(self.add_item_response1))
+        self.add_item_response2 = tu.add_item_to_order(self.order_id, self.item_id2, 1)
+        self.assertTrue(tu.status_code_is_success(self.add_item_response2))
+
+        # checkout order
+        self.checkout_response = tu.checkout_order(self.order_id).status_code
+        self.assertTrue(tu.status_code_is_success(self.checkout_response))
+
+        # Wait for RabbitMQ
+        time.sleep(0.5)
+
+        # check credit
+        self.credit_after_payment: int = tu.find_user(self.user_id)['credit']
+        self.assertEqual(self.credit_after_payment, 0)
+
+    def test_insufficientCredit(self):
+        # add items to order
+        self.add_item_response1 = tu.add_item_to_order(self.order_id, self.item_id1, 2)
+        self.assertTrue(tu.status_code_is_success(self.add_item_response1))
+        self.add_item_response2 = tu.add_item_to_order(self.order_id, self.item_id2, 1)
+        self.assertTrue(tu.status_code_is_success(self.add_item_response2))
+
+        # checkout order
+        self.checkout_response = tu.checkout_order(self.order_id).status_code
+        self.assertTrue(tu.status_code_is_success(self.checkout_response))
+        # NB: Should eventually return false or rollback by the rabbitmq-consumer
+
+        # Wait for RabbitMQ
+        time.sleep(0.5)
+
+        # check credit
+        self.credit_after_payment: int = tu.find_user(self.user_id)['credit']
+        self.assertEqual(self.credit_after_payment, 10)
 
 
 if __name__ == '__main__':
