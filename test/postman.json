@@ -63,9 +63,9 @@
                         "method": "POST",
                         "header": [],
                         "url": {
-                            "raw": "{{baseUrl}}/orders/addItem/{order_id}/{item_id}",
+                            "raw": "{{baseUrl}}/orders/addItem/{order_id}/{item_id}/{quantity}",
                             "host": ["{{baseUrl}}"],
-                            "path": ["orders", "addItem", "{order_id}", "{item_id}"]
+                            "path": ["orders", "addItem", "{order_id}", "{item_id}", "{quantity}"]
                         }
                     },
                     "response": []
