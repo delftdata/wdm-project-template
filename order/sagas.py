@@ -1,16 +1,16 @@
 import asyncio
 import contextlib
 import json
+import os
 from typing import Any, Callable, Coroutine, List, MutableMapping, ParamSpec, TypeVar
 from uuid import uuid4
 
 from aio_pika import Message, connect_robust
 from aio_pika.abc import AbstractIncomingMessage
-from pydantic import BaseModel
+from requests import Session
 
-from order.db import Session
-from order.model import AMQPMessage
-from order.services import create_order, update_order, order_details_by_order_ref_no
+from model import AMQPMessage
+from services import create_order, update_order, order_details_by_order_ref_no
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -41,7 +41,7 @@ class SagaRPC:
     async def connect(self) -> "SagaRPC":
         try:
             self.connection = await connect_robust(
-                'amqp://guest:guest@localhost/', loop=self.loop,
+                os.environ['RABBITMQ_BROKER_URL'], loop=self.loop,
             )
             self.channel = await self.connection.channel()
 
