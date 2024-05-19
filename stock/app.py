@@ -8,7 +8,7 @@ import redis
 from msgspec import msgpack, Struct
 from flask import Flask, jsonify, abort, Response
 from services import get_item, set_new_item, set_users, add_amount, remove_amount
-from exceptions import RedisDBError, ItemNotFoundError
+from exceptions import RedisDBError, ItemNotFoundError, InsufficientStockError
 
 DB_ERROR_STR = "DB error"
 
@@ -77,7 +77,7 @@ async def add_stock(item_id: str, amount: int):
     # update stock, serialize and update database
     item_entry.stock += int(amount)
     try:
-        await add_amount(item_id, item_entry)
+        await add_amount(item_id, amount)
         # db.set(item_id, msgpack.encode(item_entry))
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
@@ -93,9 +93,11 @@ async def remove_stock(item_id: str, amount: int):
     # if item_entry.stock < 0:
     #     abort(400, f"Item: {item_id} stock cannot get reduced below zero!")
     try:
-        await remove_amount(item_id, amount, item_entry)
+        await remove_amount(item_id, amount)
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
+    except InsufficientStockError:
+        return abort(400, f"Insufficient funds!")
     return Response(f"Item: {item_id} stock updated to: {item_entry.stock}", status=200)
 
 
