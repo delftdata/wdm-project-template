@@ -1,15 +1,12 @@
 import logging
 import os
 import atexit
-import logging
-import os
-import atexit
 import uuid
-
+import json
 import redis
 
 from msgspec import msgpack, Struct
-from exceptions import RedisDBError, InsufficientStockError
+from exceptions import RedisDBError, ItemNotFoundError, InsufficientStockError
 from flask import Flask, jsonify, abort, Response
 
 from aio_pika import IncomingMessage
@@ -99,8 +96,8 @@ async def stock_command_event_processor(message: IncomingMessage):
         client = message.headers.get('CLIENT')
 
         stock_order = json.loads(str(message.body.decode('utf-8')))
-        item_id = booking.get('item_id')
-        amount = booking.get('amount')
+        item_id = stock_order.get('item_id')
+        amount = stock_order.get('amount')
         response_obj: AMQPMessage = None
 
         if client == 'ORDER_REQUEST_ORCHESTRATOR' and command == 'ADD_STOCK':
