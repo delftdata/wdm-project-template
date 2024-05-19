@@ -19,6 +19,8 @@ class TestMicroservices(unittest.TestCase):
 
         # Test /stock/add/<item_id>/<number>
         add_stock_response = tu.add_stock(item_id, 50)
+        # print(add_stock_response.text)
+        print(add_stock_response)
         self.assertTrue(200 <= int(add_stock_response) < 300)
 
         stock_after_add: int = tu.find_item(item_id)['stock']
@@ -43,6 +45,8 @@ class TestMicroservices(unittest.TestCase):
 
         # Test /users/credit/add/<user_id>/<amount>
         add_credit_response = tu.add_credit_to_user(user_id, 15)
+        # print(add_credit_response.text)
+        print(add_credit_response)
         self.assertTrue(tu.status_code_is_success(add_credit_response))
 
         # add item to the stock service

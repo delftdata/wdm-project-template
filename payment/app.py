@@ -7,13 +7,13 @@ import atexit
 from msgspec import msgpack, Struct
 from flask import Flask, jsonify, abort, Response
 
-from payment.services import (get_user_db, 
+from services import (get_user_db, 
                       create_user_db, 
                       batch_init_db, 
                       add_credit_db, 
                       remove_credit_db)
 
-from payment.exceptions import RedisDBError, InsufficientCreditError
+from exceptions import RedisDBError, InsufficientCreditError
 
 app = Flask("payment-service")
 
@@ -58,7 +58,7 @@ async def batch_init_users(n: int, starting_money: int):
 
 @app.get('/find_user/<user_id>')
 async def find_user(user_id: str):
-    user_entry: UserValue = get_user_from_db(user_id)
+    user_entry: UserValue = await get_user_from_db(user_id)
     return jsonify(
         {
             "user_id": user_id,

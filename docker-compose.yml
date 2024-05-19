@@ -1,13 +1,12 @@
 version: "3"
 services:
-  
   so-rabbit:
     image: rabbitmq:3.9.15-management-alpine
     restart: unless-stopped
     env_file:
       - env/rabbitmq.env
     ports:
-      - '15671:15671'
+      - '15672:15672'
     expose:
       - '5671'
   

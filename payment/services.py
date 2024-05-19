@@ -6,9 +6,9 @@ import atexit
 from aio_pika import IncomingMessage
 from msgspec import msgpack, Struct
 
-from payment.model import AMQPMessage
-from payment.amqp_client import AMQPClient
-from payment.exceptions import RedisDBError, InsufficientCreditError
+from model import AMQPMessage
+from amqp_client import AMQPClient
+from exceptions import RedisDBError, InsufficientCreditError
 
 db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
                               port=int(os.environ['REDIS_PORT']),
@@ -80,25 +80,21 @@ async def payment_event_processor(message: IncomingMessage):
         payment_message = json.loads(str(message.body.decode('utf-8')))
         response_obj: AMQPMessage = None
         if client == 'ORDER_REQUEST_ORCHESTRATOR' and command == 'MAKE_PAYMENT':
-            await remove_credit_db(payment_message.get('user_id'), payment_message.get('amount_paid'))
+            try:
+                await remove_credit_db(payment_message.get('user_id'), payment_message.get('amount_paid'))
+                funds_available = True
+            except InsufficientCreditError:
+                funds_available = False
+            except RedisDBError:
+                #TODO: To be replaced by timeout? Or check types of error and then 
+                funds_available = False
 
             await message.ack()
             response_obj = AMQPMessage(
                 id=message.correlation_id,
                 content=None,
-                reply_state='PAYMENT_SUCCESSFUL'
+                reply_state=('PAYMENT_UNSUCCESSFUL','PAYMENT_SUCCESSFUL')[funds_available]
             )
-
-        if client == 'ORDER_REQUEST_ORCHESTRATOR' and command == 'REFUND_PAYMENT':
-            with Session() as session:
-                await refund_billing_request(session, booking.get('parking_slot_ref_no'))
-
-                await message.ack()
-                response_obj = AMQPMessage(
-                    id=message.correlation_id,
-                    content=None,
-                    reply_state='BILL_REFUNDED'
-                )
 
         # There must be a response object to signal orchestrator of
         # the outcome of the request.
@@ -106,7 +102,7 @@ async def payment_event_processor(message: IncomingMessage):
 
         amqp_client: AMQPClient = await AMQPClient().init()
         await amqp_client.event_producer(
-            'BOOKING_TX_EVENT_STORE',
+            'ORDER_TX_EVENT_STORE',
             message.reply_to,
             message.correlation_id,
             response_obj
