@@ -39,7 +39,7 @@ class Publisher(threading.Thread):
         parameters = pika.ConnectionParameters("rabbitmq", )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.queue)
+        self.channel.queue_declare(queue=self.queue, durable = True)
 
     def run(self):
         while self.is_running:
@@ -221,13 +221,13 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 @app.post('/checkout/<order_id>')
 def checkout_request(order_id: str):
     try:
-        # Get Order
-        order_entry: OrderValue = get_order_from_db(order_id)
+        # # Get Order
+        # order_entry: OrderValue = get_order_from_db(order_id)
 
         # Create Message
         message = json.dumps({
             "function": "handle_checkout",
-            "args": (order_id, order_entry.user_id, order_entry.items, order_entry.total_cost)
+            "args": (order_id, )
         })
 
         # Publish Message

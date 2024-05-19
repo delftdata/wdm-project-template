@@ -21,7 +21,7 @@ class RabbitMQConsumer:
             else:
                 break
         channel = conn.channel()
-        channel.queue_declare(queue=queue)
+        channel.queue_declare(queue=queue, durable=True)
         for method, properties, body in channel.consume(queue=queue, inactivity_timeout=30):
             if body:
                 res = json.loads(body.decode())

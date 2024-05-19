@@ -31,8 +31,10 @@ def handle_add_item(order_id, item_id, quantity):
         print("Failed to retrieve item details")
 
 
-def handle_checkout(order_id: str, user_id: str, items: list, total_cost: float):
-    print(f"Handling checkout for {order_id, items}")
+def handle_checkout(order_id: str):
+    order_entry = requests.get(f"{GATEWAY_URL}/orders/find/{order_id}").json()
+    user_id, items, total_cost = order_entry["user_id"], order_entry["items"], order_entry["total_cost"]
+    print(f"Handling checkout for {order_id}, {items}")
 
     # Calculate the quantity per item
     items_quantities = defaultdict(int)

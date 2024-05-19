@@ -113,7 +113,7 @@ class TestMicroservices(unittest.TestCase):
 
         checkout_response = tu.checkout_order(order_id).status_code
         # self.assertTrue(tu.status_code_is_failure(checkout_response)) failure now mediated by rabbitmq-consumer
-        time.sleep(0.2)
+        time.sleep(0.01)
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock_after_subtract, 15)
 
@@ -125,7 +125,7 @@ class TestMicroservices(unittest.TestCase):
 
         checkout_response = tu.checkout_order(order_id).status_code
         # self.assertTrue(tu.status_code_is_failure(checkout_response)) failure now mediated by rabbitmq-consumer
-        time.sleep(0.2)
+        time.sleep(0.01)
         add_credit_response = tu.add_credit_to_user(user_id, 15)
         self.assertTrue(tu.status_code_is_success(int(add_credit_response)))
 
@@ -135,9 +135,8 @@ class TestMicroservices(unittest.TestCase):
         self.assertEqual(stock, 15)
 
         checkout_response = tu.checkout_order(order_id)
-        print(checkout_response.text)
         self.assertTrue(tu.status_code_is_success(checkout_response.status_code))
-        time.sleep(0.2)
+        time.sleep(0.01)
 
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock_after_subtract, 14)
