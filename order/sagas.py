@@ -10,7 +10,7 @@ from aio_pika.abc import AbstractIncomingMessage
 from requests import Session
 
 from model import AMQPMessage
-from services import create_order, update_order, order_details_by_order_ref_no
+from services import create_order, update_order, order_details_by_order_ref_no, add_items_to_order,checkout_order
 
 P = ParamSpec('P')
 T = TypeVar('T')
@@ -22,7 +22,7 @@ class SagaReplyHandler:
     is_compensation: bool = False
 
     def __init__(
-        self, reply_status: str, action: Coroutine, is_compensation: bool = False
+            self, reply_status: str, action: Coroutine, is_compensation: bool = False
     ) -> None:
         self.reply_status = reply_status
         self.action = action
@@ -30,7 +30,6 @@ class SagaReplyHandler:
 
 
 class SagaRPC:
-
     data: Any = None
 
     def __init__(self) -> None:
@@ -84,7 +83,7 @@ class SagaRPC:
         return await action()
 
     async def invoke_participant(
-        self, command: str, on_reply: List[SagaReplyHandler] | None = None
+            self, command: str, on_reply: List[SagaReplyHandler] | None = None
     ) -> bool:
 
         if on_reply is None:
@@ -135,51 +134,49 @@ class SagaRPC:
 
 
 class CreateOrderRequestSaga(SagaRPC):
-
     data: AMQPMessage = None
     order_uuid: str = None
 
     def __init__(self, order_uuid: str) -> None:
         super().__init__()
+        self.checkout_order = None
+        self.add_items = None
         self.order_uuid = order_uuid
 
     @property
     async def definitions(self):
         return [
             self.invoke_local(action=self.create_order),
+            self.invoke_local(action=self.add_items),
+            self.invoke_local(action=self.checkout_order),
             self.invoke_participant(
-                command='stock.block',
+                command='stock.subtract',
                 on_reply=[
                     SagaReplyHandler(
                         'STOCK_UNAVAILABLE',
                         action=self.invoke_participant(
-                            command='stock.unblock'
+                            command='stock.add'
                         ),
                         is_compensation=True
                     ),
                 ]
             ),
-            self.invoke_participant(command='payment.authorize_payment'),
             self.invoke_participant(
-                command='stock.subtract',
+                command='payment.authorize_payment',
                 on_reply=[
                     SagaReplyHandler(
-                        'STOCK_SUBTRACT_FAILED',
-                        action=self.invoke_participant(command='stock.unblock'),
+                        'PAYMENT_FAILED',
+                        action=self.invoke_participant(command='stock.add'),
                         is_compensation=True
                     ),
+                ]
+            ),
+            self.invoke_participant(
+                command='user.subtract_credit',
+                on_reply=[
                     SagaReplyHandler(
-                        'STOCK_SUBTRACT_FAILED',
-                        action=self.invoke_participant(
-                            command='stock.add',
-                            on_reply=[
-                                SagaReplyHandler(
-                                    'STOCK_ADDED',
-                                    action=self.invoke_local(action=self.failed_order),
-                                    is_compensation=True
-                                )
-                            ]
-                        ),
+                        'INSUFFICIENT_CREDITS',
+                        action=self.invoke_participant(command='stock.add'),
                         is_compensation=True
                     ),
                 ]
@@ -191,6 +188,16 @@ class CreateOrderRequestSaga(SagaRPC):
         async with Session() as session:
             self.data = await create_order(session, self.order_uuid)
             return self.data.id is not None
+
+    async def add_items(self) -> bool:
+        async with Session() as session:
+            self.data = await add_items_to_order(session, self.order_uuid)
+            return self.data.items is not None
+
+    async def checkout_order(self) -> bool:
+        async with Session() as session:
+            self.data = await checkout_order(session, self.order_uuid)
+            return self.data.status == 'checked_out'
 
     async def completed_order(self) -> bool:
         async with Session() as session:
