@@ -35,7 +35,7 @@ atexit.register(close_db_connection)
 
 async def get_item(item_id: str) -> str:
     try:
-        return db.get(item_id)
+        entry = db.get(item_id)
     except redis.exceptions.RedisError:
         raise RedisDBError
     entry: StockValue | None = msgpack.decode(entry, type=StockValue) if entry else None

@@ -23,7 +23,7 @@ async def get_item_from_db(item_id: str) -> StockValue | None:
     try:
         entry: bytes = await get_item(item_id)
     except RedisDBError:
-        return abort(400, DB_ERROR_STR)
+        abort(400, DB_ERROR_STR)
     except ItemNotFoundError:
         abort(400, f"Item: {item_id} not found!")
     # deserialize data if it exists else return null
@@ -62,11 +62,7 @@ async def batch_init_users(n: int, starting_stock: int, item_price: int):
 
 @app.get('/find/<item_id>')
 async def find_item(item_id: str):
-    try:
-        item_entry: StockValue = await get_item_from_db(item_id)
-        app.logger.debug("ITEM_ENTRY": item_entry.stock)
-    except ItemNotFoundError:
-        abort(400, f"Item: {item_id} not found!")
+    item_entry: StockValue = await get_item_from_db(item_id)
     return jsonify(
         {
             "stock": item_entry.stock,
