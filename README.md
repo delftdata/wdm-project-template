@@ -3,3 +3,5 @@
 NOTE TO REVIEWERS
 
 The transactions that are processed by RabbitMQ are demonstrably eventually consistent. However, with the current implementation, the [benchmark](https://github.com/delftdata/wdm-project-benchmark) that is provided will not agree as the evaluation starts before RabbitMQ can finish processing all messages.
+
+Inserting a sleep statement of ~10 seconds before the evaluation step will ensure the database ends up being consistent. The logs do not give proper results based on our current implementation.
