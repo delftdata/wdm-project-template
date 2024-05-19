@@ -12,6 +12,12 @@ from msgspec import msgpack, Struct
 from exceptions import RedisDBError, InsufficientStockError
 from flask import Flask, jsonify, abort, Response
 
+from aio_pika import IncomingMessage
+from msgspec import msgpack, Struct
+
+from model import AMQPMessage
+from amqp_client import AMQPClient
+
 class StockValue(Struct):
     stock: int
     price: int
@@ -39,9 +45,9 @@ async def get_item(item_id: str) -> str:
     return entry
         
 
-async def set_new_item(price: int):
+async def set_new_item(value: int):
     key = str(uuid.uuid4())
-    value = msgpack.encode(StockValue(stock=0, price=int(price)))
+    value = msgpack.encode(StockValue(stock=0, price=int(value)))
     try:
         db.set(key, value)
     except redis.exceptions.RedisError:

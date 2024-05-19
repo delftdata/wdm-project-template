@@ -7,8 +7,8 @@ import redis
 
 from msgspec import msgpack, Struct
 from flask import Flask, jsonify, abort, Response
-from payment.services import get_item, set_new_item, set_users, add_amount, remove_amount
-from payment.exceptions import RedisDBError
+from services import get_item, set_new_item, set_users, add_amount, remove_amount
+from exceptions import RedisDBError, ItemNotFoundError
 
 DB_ERROR_STR = "DB error"
 
@@ -18,30 +18,32 @@ class StockValue(Struct):
     stock: int
     price: int
 
-def get_item_from_db(item_id: str) -> StockValue | None:
+async def get_item_from_db(item_id: str) -> StockValue | None:
     # get serialized data
     try:
-        entry: bytes = get_item(item_id)
+        entry: bytes = await get_item(item_id)
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
-    # deserialize data if it exists else return null
-    entry: StockValue | None = msgpack.decode(entry, type=StockValue) if entry else None
-    if entry is None:
-        # if item does not exist in the database; abort
+    except ItemNotFoundError:
         abort(400, f"Item: {item_id} not found!")
+    # deserialize data if it exists else return null
+    # entry: StockValue | None = msgpack.decode(entry, type=StockValue) if entry else None
+    # if entry is None:
+        # if item does not exist in the database; abort
+        # abort(400, f"Item: {item_id} not found!")
     return entry
 
 
 @app.post('/item/create/<price>')
 async def create_item(price: int):
-    key = str(uuid.uuid4())
-    app.logger.debug(f"Item: {key} created")
-    value = msgpack.encode(StockValue(stock=0, price=int(price)))
+    # key = str(uuid.uuid4())
+    # app.logger.debug(f"Item: {key} created")
+    # value = msgpack.encode(StockValue(stock=0, price=int(price)))
     try:
-        await set_new_item(key, value)
+        key = await set_new_item(price)
     except RedisDBError:
         return abort(400, DB_ERROR_STR)
-    return jsonify({'item_id': key})
+    return key
 
 
 @app.post('/batch_init/<n>/<starting_stock>/<item_price>')
@@ -59,8 +61,12 @@ async def batch_init_users(n: int, starting_stock: int, item_price: int):
 
 
 @app.get('/find/<item_id>')
-def find_item(item_id: str):
-    item_entry: StockValue = await get_item_from_db(item_id)
+async def find_item(item_id: str):
+    try:
+        item_entry: StockValue = await get_item_from_db(item_id)
+        app.logger.debug("ITEM_ENTRY": item_entry.stock)
+    except ItemNotFoundError:
+        abort(400, f"Item: {item_id} not found!")
     return jsonify(
         {
             "stock": item_entry.stock,
