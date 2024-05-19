@@ -19,18 +19,20 @@ def handle_add_item(order_id, item_id, quantity):
     if response.status_code == 200:
         item_details = response.json()
         price = int(item_details['price'])
-        
-        add_response = requests.post(f"{GATEWAY_URL}/orders/addItemProcess/{order_id.strip()}/{item_id.strip()}/{quantity.strip()}/{price}")
+
+        add_response = requests.post(
+            f"{GATEWAY_URL}/orders/addItemProcess/{order_id.strip()}/{item_id.strip()}/{quantity.strip()}/{price}")
         if add_response.status_code == 200:
-            print("Item added successfully to order")
+            print(f"Item {item_id} added {quantity} times successfully to order")
         else:
-            print(f"Failed to add item to order, status code: {add_response.status_code}, response: {add_response.text}")
+            print(
+                f"Failed to add item to order, status code: {add_response.status_code}, response: {add_response.text}")
     else:
         print("Failed to retrieve item details")
 
 
 def handle_checkout(order_id: str, user_id: str, items: list, total_cost: float):
-    print(f"Handling checkout for {order_id}")
+    print(f"Handling checkout for {order_id, items}")
 
     # Calculate the quantity per item
     items_quantities = defaultdict(int)
@@ -65,14 +67,22 @@ def handle_checkout(order_id: str, user_id: str, items: list, total_cost: float)
             return
 
         print("Checkout handled successfully")
-    
+
     except Exception as e:
         rollback_stock(removed_items)
         print(f"Failed to handle checkout: {str(e)}")
 
+
 def rollback_stock(removed_items: list):
     for item_id, quantity in removed_items:
-        requests.post(f"{GATEWAY_URL}/stock/add/{item_id}/{quantity}")
+        print(f"Rollback {item_id} {quantity} times")
+        current_stock = requests.get(f"{GATEWAY_URL}/stock/find/{item_id}").json()["stock"]
+        print(f"Stock of {item_id} before rollback: {current_stock}")
+        response = requests.post(f"{GATEWAY_URL}/stock/add/{item_id}/{quantity}")
+        print(f"Rollback response: {response.status_code}")
+        current_stock = requests.get(f"{GATEWAY_URL}/stock/find/{item_id}").json()["stock"]
+        print(f"Stock of {item_id} after rollback: {current_stock}")
+
 
 consumer = RabbitMQConsumer()
 
@@ -90,4 +100,3 @@ if __name__ == '__main__':
                 t.start()
 
         time.sleep(60)
-

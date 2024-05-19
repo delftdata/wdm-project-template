@@ -4,6 +4,7 @@ import atexit
 import random
 import uuid
 from collections import defaultdict
+import threading
 import time
 import json
 
@@ -26,22 +27,57 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
                               password=os.environ['REDIS_PASSWORD'],
                               db=int(os.environ['REDIS_DB']))
 
+
+class Publisher(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daemon = True
+        self.is_running = True
+        self.name = "Publisher"
+        self.queue = "main"
+
+        parameters = pika.ConnectionParameters("rabbitmq", )
+        self.connection = pika.BlockingConnection(parameters)
+        self.channel = self.connection.channel()
+        self.channel.queue_declare(queue=self.queue)
+
+    def run(self):
+        while self.is_running:
+            self.connection.process_data_events(time_limit=1)
+
+    def _publish(self, message):
+        self.channel.basic_publish("", self.queue, body=message.encode())
+
+    def publish(self, message):
+        self.connection.add_callback_threadsafe(lambda: self._publish(message))
+
+    def stop(self):
+        print("Stopping...")
+        self.is_running = False
+        # Wait until all the data events have been processed
+        self.connection.process_data_events(time_limit=1)
+        if self.connection.is_open:
+            self.connection.close()
+        print("Stopped")
+
+
 def create_connection():
     retries = 5
     while retries > 0:
         try:
-            params = pika.ConnectionParameters('rabbitmq')
-            connection = pika.BlockingConnection(params)
-            channel = connection.channel()
-            channel.queue_declare(queue='main')
-            return connection, channel
+            publisher = Publisher()
+            publisher.start()
+            return publisher
         except pika.exceptions.AMQPConnectionError as e:
             print(f"Connection failed: {e}, retrying...")
             time.sleep(5)
             retries -= 1
     raise Exception("Failed to connect to RabbitMQ after several attempts")
 
-connection, channel = create_connection()
+
+# Initialize connection
+publisher = create_connection()
+
 
 def close_db_connection():
     db.close()
@@ -147,17 +183,19 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
             "function": "handle_add_item",
             "args": [order_id, item_id, quantity]
         })
-        channel.basic_publish(exchange='', routing_key='main', body=message)
+        publisher.publish(message)
         return jsonify({"success": "Item addition request sent"}), 200
     except Exception as e:
+        print(e)
         return jsonify({"error": "Failed to add item", "details": str(e)}), 500
+
 
 @app.post('/addItemProcess/<order_id>/<item_id>/<quantity>/<price>')
 def add_item_process(order_id: str, item_id: str, quantity: int, price: int):
     try:
         quantity = int(quantity)
         price = int(price)
-    
+
         order_entry: OrderValue = get_order_from_db(order_id)
         if not order_entry:
             return jsonify({"error": f"Order {order_id} not found"}), 404
@@ -170,7 +208,7 @@ def add_item_process(order_id: str, item_id: str, quantity: int, price: int):
         except redis.exceptions.RedisError:
             return abort(400, DB_ERROR_STR)
         return Response(f"Item: {item_id} added to: {order_id}, price updated to: {order_entry.total_cost}", status=200)
-    
+
     except Exception as e:
         return jsonify({"error": "Failed to add item", "details": str(e)}), 500
 
@@ -193,7 +231,7 @@ def checkout_request(order_id: str):
         })
 
         # Publish Message
-        channel.basic_publish(exchange='', routing_key='main', body=message)
+        publisher.publish(message)
 
         return jsonify({"success": "Checkout request sent"}), 202
     except Exception as e:
@@ -203,19 +241,19 @@ def checkout_request(order_id: str):
 @app.post('/checkoutProcess/<order_id>')
 def checkout_process(order_id: str):
     app.logger.debug(f"Saving order {order_id}")
-    
+
     # Get Order
     order_entry: OrderValue = get_order_from_db(order_id)
-    
+
     # Update Order
     order_entry.paid = True
-    
+
     # Save Order
     try:
         db.set(order_id, msgpack.encode(order_entry))
     except redis.exceptions.RedisError:
         return abort(500, DB_ERROR_STR)
-    
+
     app.logger.debug("Checkout successful")
     return Response("Checkout successful", status=200)
 
