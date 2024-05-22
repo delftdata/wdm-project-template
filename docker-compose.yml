@@ -74,6 +74,7 @@ services:
   rabbitmq-consumer:
     build: ./rabbitmq-consumer
     image: rabbitmq-consumer:latest
+    restart: always
     environment:
       - GATEWAY_URL=http://gateway:80
     depends_on:
