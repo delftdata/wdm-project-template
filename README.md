@@ -33,7 +33,9 @@ Basic project structure with Python's Flask and Redis.
 After coding the REST endpoint logic run `docker-compose up --build` in the base folder to test if your logic is correct
 (you can use the provided tests in the `\test` folder and change them as you wish). 
 
-***Requirements:*** You need to have docker and docker-compose installed on your machine.
+***Requirements:*** You need to have docker and docker-compose installed on your machine. 
+
+K8s is also possible, but we do not require it as part of your submission. 
 
 #### minikube (local k8s cluster)
 
