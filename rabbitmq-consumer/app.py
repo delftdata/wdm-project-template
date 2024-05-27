@@ -7,12 +7,14 @@ import os
 from rabbitMQConsumer import RabbitMQConsumer
 
 GATEWAY_URL = os.environ['GATEWAY_URL']
-
+N_QUEUES = os.environ['MQ_REPLICAS']
 
 # Example function. You can put RabbitMQ, POST and GET requests to communicate with apps.
 def hello_world(hello, world):
     print(f"{hello}, {world}")
 
+def get_queue_for_order(order_id, queues):
+    return queues[hash(order_id) % len(queues)]
 
 def handle_add_item(order_id, item_id, quantity):
     response = requests.get(f"{GATEWAY_URL}/stock/find/{item_id.strip()}")
@@ -32,6 +34,7 @@ def handle_add_item(order_id, item_id, quantity):
 
 
 def handle_checkout(order_id: str):
+    print(f"The hash for the order_id is: " + get_queue_for_order(order_id, N_QUEUES))
     order_entry = requests.get(f"{GATEWAY_URL}/orders/find/{order_id}").json()
     user_id, items, total_cost = order_entry["user_id"], order_entry["items"], order_entry["total_cost"]
     print(f"Handling checkout for {order_id}, {items}")
@@ -58,17 +61,17 @@ def handle_checkout(order_id: str):
         payment_reply = requests.post(f"{GATEWAY_URL}/payment/pay/{user_id}/{total_cost}")
         if payment_reply.status_code != 200:
             rollback_stock(removed_items)
-            print("User out of credit")
+            print(f"User out of credit: {user_id}")
             return
 
         # Update order status to paid
         order_update_reply = requests.post(f"{GATEWAY_URL}/orders/checkoutProcess/{order_id}")
         if order_update_reply.status_code != 200:
             rollback_stock(removed_items)
-            print("Failed to update order status")
+            print(f"Failed to update order status: {order_id}")
             return
 
-        print("Checkout handled successfully")
+        print(f"Checkout handled successfully: {order_id}")
 
     except Exception as e:
         rollback_stock(removed_items)
@@ -86,11 +89,14 @@ def rollback_stock(removed_items: list):
         print(f"Stock of {item_id} after rollback: {current_stock}")
 
 
+
 consumer = RabbitMQConsumer()
 
 if __name__ == '__main__':
+    queues = []
     queues = ['main', 'test']
     threads = {}
+
     for q in queues:
         threads[q] = threading.Thread(target=consumer.consume_queue, args=(q, globals()), daemon=True)
         threads[q].start()

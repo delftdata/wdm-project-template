@@ -17,7 +17,7 @@ import pika
 
 DB_ERROR_STR = "DB error"
 REQ_ERROR_STR = "Requests error"
-
+N_QUEUES = os.environ['MQ_REPLICAS']
 GATEWAY_URL = os.environ['GATEWAY_URL']
 
 app = Flask("order-service")
@@ -29,23 +29,30 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
 
 
 class Publisher(threading.Thread):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, queues, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.daemon = True
         self.is_running = True
         self.name = "Publisher"
-        self.queue = "main"
+        self.queues = queues
 
         parameters = pika.ConnectionParameters("rabbitmq", )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.queue, durable = True)
+        for queue in self.queues:
+            self.channel.queue_declare(queue=self.queue, durable = True)
 
     def run(self):
         while self.is_running:
             self.connection.process_data_events(time_limit=1)
 
     def _publish(self, message):
+        message_dict = json.loads(message)
+        order_id = message_dict.get('order_id')
+        if order_id is None: 
+            raise Exception("Order ID not found in message")
+        
+        queue = self.get_queue_for_order(order_id)
         self.channel.basic_publish("", self.queue, body=message.encode())
 
     def publish(self, message):
@@ -60,12 +67,17 @@ class Publisher(threading.Thread):
             self.connection.close()
         print("Stopped")
 
+    def get_queue_for_order(self, order_id):
+        return self.queues[order_id % len(self.queues)]
 
 def create_connection():
     retries = 5
+    queues = []
+    for i in range(int(N_QUEUES)):
+        queues.append(f"main_{i}")
     while retries > 0:
         try:
-            publisher = Publisher()
+            publisher = Publisher(queues)
             publisher.start()
             return publisher
         except pika.exceptions.AMQPConnectionError as e:
@@ -220,6 +232,7 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 
 @app.post('/checkout/<order_id>')
 def checkout_request(order_id: str):
+    app.logger.debug(f"Initiating checkout for order {order_id}")
     try:
         # # Get Order
         # order_entry: OrderValue = get_order_from_db(order_id)
@@ -237,7 +250,6 @@ def checkout_request(order_id: str):
     except Exception as e:
         return jsonify({"error": "Failed to initiate checkout", "details": str(e)}), 500
 
-
 @app.post('/checkoutProcess/<order_id>')
 def checkout_process(order_id: str):
     app.logger.debug(f"Saving order {order_id}")
@@ -254,8 +266,13 @@ def checkout_process(order_id: str):
     except redis.exceptions.RedisError:
         return abort(500, DB_ERROR_STR)
 
-    app.logger.debug("Checkout successful")
+    app.logger.debug("Checkout successful for order {order_id}")
     return Response("Checkout successful", status=200)
+
+# @app.post('/checkout/failed/<order_id>')
+# def checkout_failed(order_id: str):
+#     return jsonify({"error": "Checkout failed"}), 500
+
 
 
 if __name__ == '__main__':

@@ -17,6 +17,7 @@ services:
     image: order:latest
     environment:
       - GATEWAY_URL=http://gateway:80
+      - MQ_REPLICAS = ${REPLICAS}
     command: gunicorn -b 0.0.0.0:5000 -w 2 --timeout 30 --log-level=info app:app
     env_file:
       - env/order_redis.env
@@ -67,7 +68,7 @@ services:
       - '5671:5671'
       - '5672:5672'
       - '15672:15672'  # Port for accessing the management UI
-      - '25672:25672'
+      - '25672:25672'      
     volumes:
       - rabbitmq:/var/lib/rabbitmq
 
@@ -77,8 +78,11 @@ services:
     restart: always
     environment:
       - GATEWAY_URL=http://gateway:80
+      - MQ_REPLICAS = ${REPLICAS}
     depends_on:
       - rabbitmq
+    deploy: 
+      replicas: ${REPLICAS}
 
 
 volumes:
