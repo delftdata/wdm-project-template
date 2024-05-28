@@ -45,11 +45,17 @@ class Publisher(threading.Thread):
         while self.is_running:
             self.connection.process_data_events(time_limit=1)
 
-    def _publish(self, message):
-        self.channel.basic_publish("", self.queue, body=message.encode())
+    def _publish(self, message, correlation_id="", reply_to=""):
+        self.channel.basic_publish(
+            exchange="",
+            routing_key=self.queue,
+            body=message.encode(),
+            properties=pika.BasicProperties(
+                correlation_id=correlation_id,
+                reply_to=reply_to))
 
-    def publish(self, message):
-        self.connection.add_callback_threadsafe(lambda: self._publish(message))
+    def publish(self, message, correlation_id="", reply_to=""):
+        self.connection.add_callback_threadsafe(lambda: self._publish(message, correlation_id, reply_to))
 
     def stop(self):
         print("Stopping...")
@@ -78,6 +84,34 @@ def create_connection():
 # Initialize connection
 publisher = create_connection()
 
+class RequestStatus(Struct):
+    status: str
+
+def status_callback(ch, method, properties, body):
+    status_data = json.loads(body)
+    key = status_data['correlation_id']
+    status = status_data['status']
+
+    value = msgpack.encode(RequestStatus(status=status))
+    try:
+        db.set(key, value)
+    except redis.exceptions.RedisError:
+        print(DB_ERROR_STR)
+        ch.basic_nack(delivery_tag=method.delivery_tag)
+    print(f'Request {key} is updated to {status}')
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+def status_connection():
+    status_connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
+    status_channel = status_connection.channel()
+
+    status_channel.queue_declare(queue='status', durable=True)
+    status_channel.basic_consume(queue='status', on_message_callback=status_callback, auto_ack=False)
+
+    status_thread = threading.Thread(target=status_channel.start_consuming)
+    status_thread.start()
+
+status_connection()
 
 def close_db_connection():
     db.close()
@@ -104,6 +138,19 @@ def get_order_from_db(order_id: str) -> OrderValue | None:
     if entry is None:
         # if order does not exist in the database; abort
         abort(400, f"Order: {order_id} not found!")
+    return entry
+
+def get_status_from_db(status_id: str) -> RequestStatus | None:
+    try:
+        entry: bytes = db.get(status_id)
+        print(f"get status from db: entry is {entry}")
+    except redis.exceptions.RedisError:
+        print(f"get status from db: entry is and error")
+        return abort(400, DB_ERROR_STR)
+    print(f"get status from db: entry is {entry}")
+    entry: RequestStatus | None = msgpack.decode(entry, type=RequestStatus) if entry else None
+    if entry is None:
+        abort(400, f"Status: {status_id} not found!")
     return entry
 
 
@@ -178,13 +225,15 @@ def send_get_request(url: str):
 
 @app.post('/addItem/<order_id>/<item_id>/<quantity>')
 def add_item_request(order_id: str, item_id: str, quantity: int):
+    correlation_id = str(uuid.uuid4())
     try:
         message = json.dumps({
             "function": "handle_add_item",
             "args": [order_id, item_id, quantity]
         })
-        publisher.publish(message)
-        return jsonify({"success": "Item addition request sent"}), 200
+        publisher.publish(message, correlation_id, "status")
+        db.set(correlation_id, 'Pending')
+        return jsonify({"success": "Item addition request sent", "correlation_id": correlation_id}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": "Failed to add item", "details": str(e)}), 500
@@ -256,6 +305,17 @@ def checkout_process(order_id: str):
 
     app.logger.debug("Checkout successful")
     return Response("Checkout successful", status=200)
+
+
+@app.get('/status/<correlation_id>')
+def get_status(correlation_id: str):
+    status_entry: RequestStatus = get_status_from_db(correlation_id)
+    return jsonify(
+        {
+            "correlation_id": correlation_id,
+            "status": status_entry.status
+        }
+    ), 200
 
 
 if __name__ == '__main__':

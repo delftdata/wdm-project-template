@@ -1,3 +1,5 @@
+import json
+
 import requests
 
 ORDER_URL = STOCK_URL = PAYMENT_URL = "http://127.0.0.1:8000"
@@ -52,6 +54,10 @@ def add_item_to_order(order_id: str, item_id: str, quantity: int) -> int:
     response = requests.post(f"{ORDER_URL}/orders/addItem/{order_id}/{item_id}/{quantity}")
     return response.status_code
 
+def add_item_to_order_with_response(order_id: str, item_id: str, quantity: int) -> dict:
+    response = requests.post(f"{ORDER_URL}/orders/addItem/{order_id}/{item_id}/{quantity}")
+    print(response.json())
+    return response
 
 def find_order(order_id: str) -> dict:
     return requests.get(f"{ORDER_URL}/orders/find/{order_id}").json()
@@ -59,6 +65,9 @@ def find_order(order_id: str) -> dict:
 
 def checkout_order(order_id: str) -> requests.Response:
     return requests.post(f"{ORDER_URL}/orders/checkout/{order_id}")
+
+def find_request_status(correlation_id: str) -> dict:
+    return requests.get(f"{ORDER_URL}/orders/status/{correlation_id}")
 
 
 ########################################################################################################################

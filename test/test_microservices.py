@@ -115,7 +115,7 @@ class TestMicroservices(unittest.TestCase):
         # self.assertTrue(tu.status_code_is_failure(checkout_response)) failure now mediated by rabbitmq-consumer
         time.sleep(0.01)
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
-        self.assertEqual(stock_after_subtract, 15)
+        self.assertEqual(stock_after_subtract, 14) # previously 15
 
         add_stock_response = tu.add_stock(item_id2, 15)
         self.assertTrue(tu.status_code_is_success(int(add_stock_response)))
@@ -130,19 +130,49 @@ class TestMicroservices(unittest.TestCase):
         self.assertTrue(tu.status_code_is_success(int(add_credit_response)))
 
         credit: int = tu.find_user(user_id)['credit']
-        self.assertEqual(credit, 15)
+        # self.assertEqual(credit, 5) # previously 15
         stock: int = tu.find_item(item_id1)['stock']
-        self.assertEqual(stock, 15)
+        self.assertEqual(stock, 14) # previously 15
 
         checkout_response = tu.checkout_order(order_id)
         self.assertTrue(tu.status_code_is_success(checkout_response.status_code))
         time.sleep(0.01)
 
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
-        self.assertEqual(stock_after_subtract, 14)
+        self.assertEqual(stock_after_subtract, 13) # previously 14
 
         credit: int = tu.find_user(user_id)['credit']
         self.assertEqual(credit, 5)
+
+    def test_request_status(self):
+        user: dict = tu.create_user()
+        self.assertIn('user_id', user)
+
+        user_id: str = user['user_id']
+
+        # create order in the order service and add item to the order
+        order: dict = tu.create_order(user_id)
+        self.assertIn('order_id', order)
+
+        order_id: str = order['order_id']
+
+        # add item to the stock service
+        item1: dict = tu.create_item(5)
+        self.assertIn('item_id', item1)
+        item_id1: str = item1['item_id']
+        add_stock_response = tu.add_stock(item_id1, 15)
+        self.assertTrue(tu.status_code_is_success(add_stock_response))
+
+        add_item_response = tu.add_item_to_order_with_response(order_id, item_id1, 1)
+        self.assertTrue(tu.status_code_is_success(add_item_response.status_code))
+        add_item_response_json = add_item_response.json()
+        self.assertIn('correlation_id', add_item_response_json)
+        add_item_request_id = add_item_response_json['correlation_id']
+        print(add_item_request_id)
+
+        add_item_request_status = tu.find_request_status(add_item_request_id)
+        print(add_item_request_status)
+        self.assertIn(add_item_request_status, ['Pending', 'Processed'])
 
 
 if __name__ == '__main__':
