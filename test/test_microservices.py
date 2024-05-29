@@ -1,3 +1,4 @@
+import json
 import unittest
 
 import utils as tu
@@ -168,11 +169,24 @@ class TestMicroservices(unittest.TestCase):
         add_item_response_json = add_item_response.json()
         self.assertIn('correlation_id', add_item_response_json)
         add_item_request_id = add_item_response_json['correlation_id']
-        print(add_item_request_id)
 
         add_item_request_status = tu.find_request_status(add_item_request_id)
-        print(add_item_request_status)
-        self.assertIn(add_item_request_status, ['Pending', 'Processed'])
+        status_attribute = add_item_request_status.json()
+        self.assertIn(status_attribute['status'], ['Pending', 'Processed'])
+
+        # Expect Processed, but still Pending? Maybe other http requests need to be done manually
+        # time.sleep(5)
+        #
+        # Redo find_request_status
+
+        checkout_response = tu.checkout_order(order_id)
+        self.assertTrue(tu.status_code_is_success(checkout_response.status_code))
+        checkout_response_json = checkout_response.json()
+        checkout_request_id = checkout_response_json['correlation_id']
+
+        checkout_request_status = tu.find_request_status(checkout_request_id).json()
+        self.assertIn(checkout_request_status['status'], ['Pending', 'Processed'])
+
 
 
 if __name__ == '__main__':

@@ -87,31 +87,29 @@ publisher = create_connection()
 class RequestStatus(Struct):
     status: str
 
-def status_callback(ch, method, properties, body):
-    status_data = json.loads(body)
-    key = status_data['correlation_id']
-    status = status_data['status']
+def consume_status_queue():
+    def status_callback(ch, method, properties, body):
+        status_data = json.loads(body)
+        key = status_data['correlation_id']
+        status = status_data['status']
 
-    value = msgpack.encode(RequestStatus(status=status))
-    try:
-        db.set(key, value)
-    except redis.exceptions.RedisError:
-        print(DB_ERROR_STR)
-        ch.basic_nack(delivery_tag=method.delivery_tag)
-    print(f'Request {key} is updated to {status}')
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+        value = msgpack.encode(RequestStatus(status=status))
+        try:
+            db.set(key, value)
+        except redis.exceptions.RedisError:
+            print(DB_ERROR_STR)
+            ch.basic_nack(delivery_tag=method.delivery_tag)
+        app.logger.debug(f'Request {key} is updated to {status}')
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
-def status_connection():
     status_connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
     status_channel = status_connection.channel()
 
     status_channel.queue_declare(queue='status', durable=True)
     status_channel.basic_consume(queue='status', on_message_callback=status_callback, auto_ack=False)
 
-    status_thread = threading.Thread(target=status_channel.start_consuming)
-    status_thread.start()
-
-status_connection()
+    print('Waiting for status messages')
+    status_channel.start_consuming()
 
 def close_db_connection():
     db.close()
@@ -143,12 +141,13 @@ def get_order_from_db(order_id: str) -> OrderValue | None:
 def get_status_from_db(status_id: str) -> RequestStatus | None:
     try:
         entry: bytes = db.get(status_id)
-        print(f"get status from db: entry is {entry}")
+        app.logger.debug(f"get status from db: entry is {entry}")
     except redis.exceptions.RedisError:
-        print(f"get status from db: entry is and error")
+        app.logger.debug(f"get status from db: entry is and error")
         return abort(400, DB_ERROR_STR)
-    print(f"get status from db: entry is {entry}")
+    app.logger.debug(f"get status from db: entry is {entry}")
     entry: RequestStatus | None = msgpack.decode(entry, type=RequestStatus) if entry else None
+    app.logger.debug(f"DECODED get status from db: entry is {entry}")
     if entry is None:
         abort(400, f"Status: {status_id} not found!")
     return entry
@@ -232,7 +231,8 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
             "args": [order_id, item_id, quantity]
         })
         publisher.publish(message, correlation_id, "status")
-        db.set(correlation_id, 'Pending')
+        value = msgpack.encode(RequestStatus(status='Pending'))
+        db.set(correlation_id, value)
         return jsonify({"success": "Item addition request sent", "correlation_id": correlation_id}), 200
     except Exception as e:
         print(e)
@@ -269,6 +269,7 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 
 @app.post('/checkout/<order_id>')
 def checkout_request(order_id: str):
+    correlation_id = str(uuid.uuid4())
     try:
         # # Get Order
         # order_entry: OrderValue = get_order_from_db(order_id)
@@ -282,7 +283,11 @@ def checkout_request(order_id: str):
         # Publish Message
         publisher.publish(message)
 
-        return jsonify({"success": "Checkout request sent"}), 202
+        # Store request status
+        value = msgpack.encode(RequestStatus(status='Pending'))
+        db.set(correlation_id, value)
+
+        return jsonify({"success": "Checkout request sent", "correlation_id": correlation_id}), 202
     except Exception as e:
         return jsonify({"error": "Failed to initiate checkout", "details": str(e)}), 500
 
@@ -309,7 +314,9 @@ def checkout_process(order_id: str):
 
 @app.get('/status/<correlation_id>')
 def get_status(correlation_id: str):
+    app.logger.debug(f"GET request for {correlation_id}")
     status_entry: RequestStatus = get_status_from_db(correlation_id)
+    app.logger.debug(f"GET request for {correlation_id} is {status_entry} ")
     return jsonify(
         {
             "correlation_id": correlation_id,
@@ -319,7 +326,12 @@ def get_status(correlation_id: str):
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    # Start the status queue consumer in a separate Thread
+    status_thread = threading.Thread(target=consume_status_queue())
+    status_thread.daemon = True
+    status_thread.start()
+
+    app.run(host="0.0.0.0", port=8000, debug=True, threaded=True)
 else:
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
