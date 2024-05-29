@@ -39,8 +39,9 @@ class Publisher(threading.Thread):
         parameters = pika.ConnectionParameters("rabbitmq", )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        for queue in self.queues:
-            self.channel.queue_declare(queue=self.queue, durable = True)
+        for i, queue in enumerate(self.queues):
+            self.channel.queue_declare(queue, durable = True)
+            # self.channel.queue_bind(queue, exchange='direct_exchange', routing_key=str(i)) 
 
     def run(self):
         while self.is_running:
@@ -48,12 +49,15 @@ class Publisher(threading.Thread):
 
     def _publish(self, message):
         message_dict = json.loads(message)
-        order_id = message_dict.get('order_id')
+        order_id = message_dict.get('args')[0]
+        
         if order_id is None: 
             raise Exception("Order ID not found in message")
-        
+        # raise Exception(message_dict.get('args')[0])
+        # raise Exception(message_dict)
         queue = self.get_queue_for_order(order_id)
-        self.channel.basic_publish("", self.queue, body=message.encode())
+        # raise Exception("queue: " + str(queue))
+        self.channel.basic_publish("", routing_key=str(queue), body=message.encode())
 
     def publish(self, message):
         self.connection.add_callback_threadsafe(lambda: self._publish(message))
@@ -68,7 +72,12 @@ class Publisher(threading.Thread):
         print("Stopped")
 
     def get_queue_for_order(self, order_id):
-        return self.queues[order_id % len(self.queues)]
+        print(hash(order_id) % len(self.queues))
+        print(self.queues[hash(order_id) % len(self.queues)])
+       
+        # raise Exception("Result" + str(self.queues[hash(order_id) % len(self.queues)]))
+            
+        return self.queues[hash(order_id) % int(N_QUEUES)]
 
 def create_connection():
     retries = 5
