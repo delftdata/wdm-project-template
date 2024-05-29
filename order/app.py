@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import atexit
@@ -40,7 +41,7 @@ class Publisher(threading.Thread):
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
         for i, queue in enumerate(self.queues):
-            self.channel.queue_declare(queue, durable = True)
+            self.channel.queue_declare(queue, durable=True)
             # self.channel.queue_bind(queue, exchange='direct_exchange', routing_key=str(i)) 
 
     def run(self):
@@ -50,8 +51,8 @@ class Publisher(threading.Thread):
     def _publish(self, message):
         message_dict = json.loads(message)
         order_id = message_dict.get('args')[0]
-        
-        if order_id is None: 
+
+        if order_id is None:
             raise Exception("Order ID not found in message")
         # raise Exception(message_dict.get('args')[0])
         # raise Exception(message_dict)
@@ -72,12 +73,8 @@ class Publisher(threading.Thread):
         print("Stopped")
 
     def get_queue_for_order(self, order_id):
-        print(hash(order_id) % len(self.queues))
-        print(self.queues[hash(order_id) % len(self.queues)])
-       
-        # raise Exception("Result" + str(self.queues[hash(order_id) % len(self.queues)]))
-            
-        return self.queues[hash(order_id) % int(N_QUEUES)]
+        return self.queues[int(hashlib.md5(order_id.encode()).hexdigest(), 16) % int(N_QUEUES)]
+
 
 def create_connection():
     retries = 5
@@ -249,7 +246,7 @@ def checkout_request(order_id: str):
         # Create Message
         message = json.dumps({
             "function": "handle_checkout",
-            "args": (order_id, )
+            "args": (order_id,)
         })
 
         # Publish Message
@@ -258,6 +255,7 @@ def checkout_request(order_id: str):
         return jsonify({"success": "Checkout request sent"}), 202
     except Exception as e:
         return jsonify({"error": "Failed to initiate checkout", "details": str(e)}), 500
+
 
 @app.post('/checkoutProcess/<order_id>')
 def checkout_process(order_id: str):
@@ -278,10 +276,10 @@ def checkout_process(order_id: str):
     app.logger.debug("Checkout successful for order {order_id}")
     return Response("Checkout successful", status=200)
 
+
 # @app.post('/checkout/failed/<order_id>')
 # def checkout_failed(order_id: str):
 #     return jsonify({"error": "Checkout failed"}), 500
-
 
 
 if __name__ == '__main__':
