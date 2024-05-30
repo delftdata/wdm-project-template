@@ -30,7 +30,7 @@ def handle_add_item(order_id, item_id, quantity):
         add_response = requests.post(
             f"{GATEWAY_URL}/orders/addItemProcess/{order_id.strip()}/{item_id.strip()}/{quantity.strip()}/{price}")
         if add_response.status_code == 200:
-            print(f"Item {item_id} added {quantity} times successfully to order")
+            print(f"Item {item_id} added {quantity} times successfully to order {order_id}")
         else:
             print(
                 f"Failed to add item to order, status code: {add_response.status_code}, response: {add_response.text}")
@@ -41,7 +41,7 @@ def handle_add_item(order_id, item_id, quantity):
 def handle_checkout(order_id: str):
     order_entry = requests.get(f"{GATEWAY_URL}/orders/find/{order_id}").json()
     user_id, items, total_cost = order_entry["user_id"], order_entry["items"], order_entry["total_cost"]
-    print(f"Handling checkout for {order_id}, {items}")
+    print(f"Handling checkout for {order_id}, {items}, User:{user_id}")
 
     # Calculate the quantity per item
     items_quantities = defaultdict(int)
@@ -55,7 +55,7 @@ def handle_checkout(order_id: str):
         for item_id, quantity in items_quantities.items():
             stock_reply = requests.post(f"{GATEWAY_URL}/stock/subtract/{item_id}/{quantity}")
             if stock_reply.status_code != 200:
-                rollback_stock(removed_items)
+                rollback_stock(removed_items, order_id)
                 print(f"Out of stock on item_id: {item_id}")
                 return
 
@@ -64,25 +64,26 @@ def handle_checkout(order_id: str):
         # Process payment
         payment_reply = requests.post(f"{GATEWAY_URL}/payment/pay/{user_id}/{total_cost}")
         if payment_reply.status_code != 200:
-            rollback_stock(removed_items)
+            rollback_stock(removed_items, order_id)
             print(f"User out of credit: {user_id}")
             return
 
         # Update order status to paid
         order_update_reply = requests.post(f"{GATEWAY_URL}/orders/checkoutProcess/{order_id}")
         if order_update_reply.status_code != 200:
-            rollback_stock(removed_items)
+            rollback_stock(removed_items, order_id)
             print(f"Failed to update order status: {order_id}")
             return
 
-        print(f"Checkout handled successfully: {order_id}")
+        print(f"Checkout handled successfully: {order_id}, calculated queue: {get_queue_for_order(order_id)}")
 
     except Exception as e:
         rollback_stock(removed_items)
         print(f"Failed to handle checkout: {str(e)}")
 
 
-def rollback_stock(removed_items: list):
+def rollback_stock(removed_items: list, order_id: str):
+    print(f"Rolling back stock for order: {order_id}")
     for item_id, quantity in removed_items:
         print(f"Rollback {item_id} {quantity} times")
         current_stock = requests.get(f"{GATEWAY_URL}/stock/find/{item_id}").json()["stock"]

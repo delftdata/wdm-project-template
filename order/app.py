@@ -51,13 +51,9 @@ class Publisher(threading.Thread):
     def _publish(self, message):
         message_dict = json.loads(message)
         order_id = message_dict.get('args')[0]
-
-        if order_id is None:
-            raise Exception("Order ID not found in message")
-        # raise Exception(message_dict.get('args')[0])
-        # raise Exception(message_dict)
-        queue = self.get_queue_for_order(order_id)
-        # raise Exception("queue: " + str(queue))
+        order_entry: OrderValue = get_order_from_db(order_id)
+        user_id = order_entry.user_id  
+        queue = self.get_queue_for_order(user_id) ### TEMPORARILY CHANGED TO USER_ID
         self.channel.basic_publish("", routing_key=str(queue), body=message.encode())
 
     def publish(self, message):
@@ -240,13 +236,13 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 def checkout_request(order_id: str):
     app.logger.debug(f"Initiating checkout for order {order_id}")
     try:
-        # # Get Order
+        # # user_id from order
         # order_entry: OrderValue = get_order_from_db(order_id)
-
+        # user_id = order_entry.user_id
         # Create Message
         message = json.dumps({
             "function": "handle_checkout",
-            "args": (order_id,)
+            "args": (order_id, )
         })
 
         # Publish Message
