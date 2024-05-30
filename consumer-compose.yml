@@ -1,0 +1,34 @@
+services:
+
+  rabbitmq-consumer-0:
+    build: ./rabbitmq-consumer
+    image: rabbitmq-consumer:latest
+    restart: always
+    environment: 
+      - GATEWAY_URL=http://gateway:80
+      - MQ_REPLICAS=${REPLICAS}
+      - REPLICA_INDEX=0
+    depends_on:
+      - rabbitmq
+
+  rabbitmq-consumer-1:
+    build: ./rabbitmq-consumer
+    image: rabbitmq-consumer:latest
+    restart: always
+    environment: 
+      - GATEWAY_URL=http://gateway:80
+      - MQ_REPLICAS=${REPLICAS}
+      - REPLICA_INDEX=1
+    depends_on:
+      - rabbitmq
+
+  rabbitmq-consumer-2:
+    build: ./rabbitmq-consumer
+    image: rabbitmq-consumer:latest
+    restart: always
+    environment: 
+      - GATEWAY_URL=http://gateway:80
+      - MQ_REPLICAS=${REPLICAS}
+      - REPLICA_INDEX=2
+    depends_on:
+      - rabbitmq
