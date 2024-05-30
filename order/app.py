@@ -42,22 +42,16 @@ class Publisher(threading.Thread):
         self.channel = self.connection.channel()
         for i, queue in enumerate(self.queues):
             self.channel.queue_declare(queue, durable=True)
-            # self.channel.queue_bind(queue, exchange='direct_exchange', routing_key=str(i)) 
 
     def run(self):
         while self.is_running:
             self.connection.process_data_events(time_limit=1)
 
-    def _publish(self, message):
-        message_dict = json.loads(message)
-        order_id = message_dict.get('args')[0]
-        order_entry: OrderValue = get_order_from_db(order_id)
-        user_id = order_entry.user_id  
-        queue = self.get_queue_for_order(user_id) ### TEMPORARILY CHANGED TO USER_ID
+    def _publish(self, message, queue):
         self.channel.basic_publish("", routing_key=str(queue), body=message.encode())
 
-    def publish(self, message):
-        self.connection.add_callback_threadsafe(lambda: self._publish(message))
+    def publish(self, message, queue):
+        self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
 
     def stop(self):
         print("Stopping...")
@@ -68,8 +62,13 @@ class Publisher(threading.Thread):
             self.connection.close()
         print("Stopped")
 
-    def get_queue_for_order(self, order_id):
-        return self.queues[int(hashlib.md5(order_id.encode()).hexdigest(), 16) % int(N_QUEUES)]
+    def get_user_id(self, order_id):
+        order_entry: OrderValue = get_order_from_db(order_id)
+        return order_entry.user_id
+
+    def get_queue_for_order(self, key):
+        """Get the queue for the given key. E.g. order_id or user_id."""
+        return self.queues[int(hashlib.md5(key.encode()).hexdigest(), 16) % int(N_QUEUES)]
 
 
 def create_connection():
@@ -197,7 +196,8 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
             "function": "handle_add_item",
             "args": [order_id, item_id, quantity]
         })
-        publisher.publish(message)
+        queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        publisher.publish(message, queue)
         return jsonify({"success": "Item addition request sent"}), 200
     except Exception as e:
         print(e)
@@ -246,7 +246,8 @@ def checkout_request(order_id: str):
         })
 
         # Publish Message
-        publisher.publish(message)
+        queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        publisher.publish(message, queue)
 
         return jsonify({"success": "Checkout request sent"}), 202
     except Exception as e:

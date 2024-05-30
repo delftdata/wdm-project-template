@@ -75,7 +75,7 @@ def handle_checkout(order_id: str):
             print(f"Failed to update order status: {order_id}")
             return
 
-        print(f"Checkout handled successfully: {order_id}, calculated queue: {get_queue_for_order(order_id)}")
+        print(f"Checkout handled successfully: {order_id}, calculated queue: {get_queue_for_order(user_id)}")
 
     except Exception as e:
         rollback_stock(removed_items)
