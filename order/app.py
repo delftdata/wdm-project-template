@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import atexit
@@ -17,7 +18,7 @@ import pika
 
 DB_ERROR_STR = "DB error"
 REQ_ERROR_STR = "Requests error"
-
+N_QUEUES = os.environ['MQ_REPLICAS']
 GATEWAY_URL = os.environ['GATEWAY_URL']
 
 app = Flask("order-service")
@@ -29,34 +30,71 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
 
 
 class Publisher(threading.Thread):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, queues, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.daemon = True
         self.is_running = True
         self.name = "Publisher"
-        self.queue = "main"
+        self.queues = queues
 
         parameters = pika.ConnectionParameters("rabbitmq", )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.queue, durable = True)
+        for queue in self.queues:
+            self.channel.queue_declare(queue, durable=True)
 
     def run(self):
         while self.is_running:
-            self.connection.process_data_events(time_limit=1)
+            counter = 0
+            try:
+                self.connection.process_data_events(time_limit=1)
+            except pika.exceptions.ConnectionClosedByBroker:
+                print("Connection closed by broker, retrying...")
+                counter += 1
+                if counter > 3:
+                    # Restart the service
+                    app.logger.error("Connection closed by broker, restarting service...")
+                    self.restart()
+                self.connect()
 
-    def _publish(self, message, correlation_id="", reply_to=""):
+    def _publish(self, message, queue, correlation_id="", reply_to=""):
         self.channel.basic_publish(
             exchange="",
-            routing_key=self.queue,
+            routing_key=str(queue),
             body=message.encode(),
             properties=pika.BasicProperties(
+                delivery_mode=2,
                 correlation_id=correlation_id,
-                delivery_mode=2,  # Persistent message
                 reply_to=reply_to))
 
-    def publish(self, message, correlation_id="", reply_to=""):
-        self.connection.add_callback_threadsafe(lambda: self._publish(message, correlation_id, reply_to))
+    def connect(self):
+        counter = 10
+        while counter > 0:
+            try:
+                if not self.connection or self.connection.is_closed:
+                    parameters = pika.ConnectionParameters("rabbitmq", )
+                    self.connection = pika.BlockingConnection(parameters)
+                    for queue in self.queues:
+                        self.channel.queue_declare(queue, durable=True)
+            except Exception as e:
+                print(f"Failed to connect to RabbitMQ: {str(e)}")
+                time.sleep(5)
+                counter -= 1
+                self.connect()
+            if counter == 0:
+                raise Exception("Failed to connect to RabbitMQ after several attempts, dropping message...")
+
+    def publish(self, message, queue, correlation_id="", reply_to=""):
+        if not self.connection.is_open:
+            self.connect()
+        while True:
+            try:
+                self.connection.add_callback_threadsafe(lambda: self._publish(message, queue, correlation_id, reply_to))
+            except pika.exceptions.ConnectionClosed:
+                print("Connection closed, reconnecting...")
+                self.connect()
+            else:
+                break
 
     def stop(self):
         print("Stopping...")
@@ -67,12 +105,24 @@ class Publisher(threading.Thread):
             self.connection.close()
         print("Stopped")
 
+    @staticmethod
+    def get_user_id(order_id):
+        order_entry: OrderValue = get_order_from_db(order_id)
+        return order_entry.user_id
+
+    def get_queue_for_order(self, key):
+        """Get the queue for the given key. E.g. order_id or user_id."""
+        return self.queues[int(hashlib.md5(key.encode()).hexdigest(), 16) % int(N_QUEUES)]
+
 
 def create_connection():
     retries = 5
+    queues = []
+    for i in range(int(N_QUEUES)):
+        queues.append(f"main_{i}")
     while retries > 0:
         try:
-            publisher = Publisher()
+            publisher = Publisher(queues)
             publisher.start()
             return publisher
         except pika.exceptions.AMQPConnectionError as e:
@@ -152,7 +202,7 @@ def cleanup():
     consumer.stop()
 
 atexit.register(close_db_connection)
-atexit.register(cleanup)
+#  atexit.register(cleanup)
 
 
 class OrderValue(Struct):
@@ -267,10 +317,13 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
             "function": "handle_add_item",
             "args": [order_id, item_id, quantity]
         })
-        publisher.publish(message, correlation_id, "status")
+        queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        if not publisher.connection.is_open:
+            publisher.connect()
+        publisher.publish(message, queue, correlation_id, "status")
         value = msgpack.encode(RequestStatus(status='Pending'))
         db.set(correlation_id, value)
-        return jsonify({"success": "Item addition request sent", "correlation_id": correlation_id}), 200
+        return jsonify({"success": "Item addition request sent"}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": "Failed to add item", "details": str(e)}), 500
@@ -306,19 +359,21 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 
 @app.post('/checkout/<order_id>')
 def checkout_request(order_id: str):
+    app.logger.debug(f"Initiating checkout for order {order_id}")
     correlation_id = str(uuid.uuid4())
     try:
-        # # Get Order
+        # # user_id from order
         # order_entry: OrderValue = get_order_from_db(order_id)
-
+        # user_id = order_entry.user_id
         # Create Message
         message = json.dumps({
             "function": "handle_checkout",
-            "args": (order_id, )
+            "args": (order_id,)
         })
 
         # Publish Message
-        publisher.publish(message, correlation_id, "status")
+        queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        publisher.publish(message, queue, correlation_id, "status")
 
         # Store request status
         value = msgpack.encode(RequestStatus(status='Pending'))
@@ -345,7 +400,7 @@ def checkout_process(order_id: str):
     except redis.exceptions.RedisError:
         return abort(500, DB_ERROR_STR)
 
-    app.logger.debug("Checkout successful")
+    app.logger.debug("Checkout successful for order {order_id}")
     return Response("Checkout successful", status=200)
 
 
@@ -360,6 +415,11 @@ def get_status(correlation_id: str):
             "status": status_entry.status
         }
     ), 200
+
+
+# @app.post('/checkout/failed/<order_id>')
+# def checkout_failed(order_id: str):
+#     return jsonify({"error": "Checkout failed"}), 500
 
 
 if __name__ == '__main__':
