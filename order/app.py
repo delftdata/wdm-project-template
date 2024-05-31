@@ -47,8 +47,8 @@ class Publisher(threading.Thread):
         while self.is_running:
             self.connection.process_data_events(time_limit=1)
 
-    def _publish(self, message, queue):
-        self.channel.basic_publish("", routing_key=str(queue), body=message.encode())
+    def _publish(self, message):
+        self.channel.basic_publish("", self.queue, body=message.encode(), properties=pika.BasicProperties(delivery_mode=2,))
 
     def publish(self, message, queue):
         self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
