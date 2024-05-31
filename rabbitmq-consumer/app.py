@@ -111,6 +111,7 @@ if __name__ == '__main__':
         # Restart if heartbeat stopped
         for q, t in threads.items():
             if not t.is_alive():
-                t.start()
+                threads[q] = threading.Thread(target=consumer.consume_queue, args=(q, globals()), daemon=True)
+                threads[q].start()
 
         time.sleep(60)

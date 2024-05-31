@@ -18,6 +18,9 @@ class RabbitMQConsumer:
             except pika.exceptions.AMQPConnectionError:
                 print(f"Retrying connection for queue {queue}...")
                 time.sleep(5)
+            except Exception as e:
+                print(f"Failed to connect to RabbitMQ: {str(e)}")
+                time.sleep(5)
             else:
                 break
         channel = conn.channel()
