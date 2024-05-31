@@ -40,18 +40,50 @@ class Publisher(threading.Thread):
         parameters = pika.ConnectionParameters("rabbitmq", )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        for i, queue in enumerate(self.queues):
+        for queue in self.queues:
             self.channel.queue_declare(queue, durable=True)
 
     def run(self):
         while self.is_running:
-            self.connection.process_data_events(time_limit=1)
+            counter = 0
+            try:
+                self.connection.process_data_events(time_limit=1)
+            except pika.exceptions.ConnectionClosedByBroker:
+                print("Connection closed by broker, retrying...")
+                counter += 1
+                if counter > 3:
+                    # Restart the service
+                    app.logger.error("Connection closed by broker, restarting service...")
+                    self.restart()
+                self.connect()
 
-    def _publish(self, message):
-        self.channel.basic_publish("", self.queue, body=message.encode(), properties=pika.BasicProperties(delivery_mode=2,))
+    def _publish(self, message, queue):
+        self.channel.basic_publish("", routing_key=str(queue), body=message.encode(), properties=pika.BasicProperties(delivery_mode=2,))
+
+    def connect(self):
+        counter = 3
+        while counter > 0:
+            try: 
+                if not self.connection or self.connection.is_closed:
+                    parameters = pika.ConnectionParameters("rabbitmq", )
+                    self.connection = pika.BlockingConnection(parameters)
+                    for queue in self.queues:
+                        self.channel.queue_declare(queue, durable=True)
+            except Exception as e: 
+                print(f"Failed to connect to RabbitMQ: {str(e)}")
+                time.sleep(5)
+                counter -= 1
+                self.connect()
+        if counter == 0:
+            raise Exception("Failed to connect to RabbitMQ after several attempts, dropping message...")
 
     def publish(self, message, queue):
-        self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
+        try:
+            self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
+        except pika.exceptions.ConnectionClosed: 
+            print("Connection closed, reconnecting...")
+            self.connect()
+            self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
 
     def stop(self):
         print("Stopping...")
