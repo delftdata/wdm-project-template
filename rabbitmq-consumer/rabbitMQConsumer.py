@@ -42,6 +42,10 @@ class RabbitMQConsumer:
                             channel.basic_nack(delivery_tag=method.delivery_tag)
             except (pika.exceptions.StreamLostError, pika.exceptions.ConnectionClosedByBroker):
                 print("Connection to RabbitMQ Lost. Retrying connection...")
+                try:
+                    conn.close()
+                except pika.exceptions.ConnectionWrongStateError:
+                    pass
                 while True:
                     try:
                         conn = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))

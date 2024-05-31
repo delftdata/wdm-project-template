@@ -58,32 +58,37 @@ class Publisher(threading.Thread):
                 self.connect()
 
     def _publish(self, message, queue):
-        self.channel.basic_publish("", routing_key=str(queue), body=message.encode(), properties=pika.BasicProperties(delivery_mode=2,))
+        self.channel.basic_publish("", routing_key=str(queue), body=message.encode(),
+                                   properties=pika.BasicProperties(delivery_mode=2, ))
 
     def connect(self):
-        counter = 3
+        counter = 10
         while counter > 0:
-            try: 
+            try:
                 if not self.connection or self.connection.is_closed:
                     parameters = pika.ConnectionParameters("rabbitmq", )
                     self.connection = pika.BlockingConnection(parameters)
                     for queue in self.queues:
                         self.channel.queue_declare(queue, durable=True)
-            except Exception as e: 
+            except Exception as e:
                 print(f"Failed to connect to RabbitMQ: {str(e)}")
                 time.sleep(5)
                 counter -= 1
                 self.connect()
-        if counter == 0:
-            raise Exception("Failed to connect to RabbitMQ after several attempts, dropping message...")
+            if counter == 0:
+                raise Exception("Failed to connect to RabbitMQ after several attempts, dropping message...")
 
     def publish(self, message, queue):
-        try:
-            self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
-        except pika.exceptions.ConnectionClosed: 
-            print("Connection closed, reconnecting...")
+        if not self.connection.is_open:
             self.connect()
-            self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
+        while True:
+            try:
+                self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
+            except pika.exceptions.ConnectionClosed:
+                print("Connection closed, reconnecting...")
+                self.connect()
+            else:
+                break
 
     def stop(self):
         print("Stopping...")
@@ -94,7 +99,8 @@ class Publisher(threading.Thread):
             self.connection.close()
         print("Stopped")
 
-    def get_user_id(self, order_id):
+    @staticmethod
+    def get_user_id(order_id):
         order_entry: OrderValue = get_order_from_db(order_id)
         return order_entry.user_id
 
@@ -229,6 +235,8 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
             "args": [order_id, item_id, quantity]
         })
         queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        if not publisher.connection.is_open:
+            publisher.connect()
         publisher.publish(message, queue)
         return jsonify({"success": "Item addition request sent"}), 200
     except Exception as e:
@@ -274,7 +282,7 @@ def checkout_request(order_id: str):
         # Create Message
         message = json.dumps({
             "function": "handle_checkout",
-            "args": (order_id, )
+            "args": (order_id,)
         })
 
         # Publish Message
