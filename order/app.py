@@ -52,6 +52,7 @@ class Publisher(threading.Thread):
             body=message.encode(),
             properties=pika.BasicProperties(
                 correlation_id=correlation_id,
+                delivery_mode=2,  # Persistent message
                 reply_to=reply_to))
 
     def publish(self, message, correlation_id="", reply_to=""):
@@ -81,14 +82,30 @@ def create_connection():
     raise Exception("Failed to connect to RabbitMQ after several attempts")
 
 
-# Initialize connection
+# Initialize Publisher connection
 publisher = create_connection()
 
 class RequestStatus(Struct):
     status: str
 
-def consume_status_queue():
-    def status_callback(ch, method, properties, body):
+class Consumer(threading.Thread):
+    def __init__(self, queue='status'):
+        super().__init__()
+        self.daemon = True
+        self.queue = queue
+        self.is_running = True
+
+        parameters = pika.ConnectionParameters("rabbitmq")
+        self.connection = pika.BlockingConnection(parameters)
+        self.channel = self.connection.channel()
+        self.channel.queue_declare(queue=self.queue, durable=True)
+
+    def run(self):
+        self.channel.basic_consume(queue=self.queue, on_message_callback=self.callback)
+        while self.is_running:
+            self.connection.process_data_events(time_limit=1)
+
+    def callback(self, ch, method, properties, body):
         status_data = json.loads(body)
         key = status_data['correlation_id']
         status = status_data['status']
@@ -96,26 +113,46 @@ def consume_status_queue():
         value = msgpack.encode(RequestStatus(status=status))
         try:
             db.set(key, value)
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            app.logger.debug(f'Request {key} is updated to {status}')
         except redis.exceptions.RedisError:
             print(DB_ERROR_STR)
             ch.basic_nack(delivery_tag=method.delivery_tag)
-        app.logger.debug(f'Request {key} is updated to {status}')
-        ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    status_connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
-    status_channel = status_connection.channel()
+    def stop(self):
+        print("Stopping...")
+        self.is_running = False
+        self.connection.process_data_events(time_limit=1)
+        if self.connection.is_open:
+            self.connection.close()
+        print("Stopped")
 
-    status_channel.queue_declare(queue='status', durable=True)
-    status_channel.basic_consume(queue='status', on_message_callback=status_callback, auto_ack=False)
+def create_status_connection():
+    retries = 5
+    while retries > 0:
+        try:
+            consumer = Consumer()
+            consumer.start()
+            return consumer
+        except pika.exceptions.AMQPConnectionError as e:
+            print(f"Connection failed: {e}, retrying...")
+            time.sleep(5)
+            retries -= 1
+    raise Exception("Failed to connect to RabbitMQ status queue after several attempts")
 
-    print('Waiting for status messages')
-    status_channel.start_consuming()
+# Initialize Consumer connection
+consumer = create_status_connection()
 
 def close_db_connection():
     db.close()
 
 
+def cleanup():
+    publisher.stop()
+    consumer.stop()
+
 atexit.register(close_db_connection)
+atexit.register(cleanup)
 
 
 class OrderValue(Struct):
@@ -281,7 +318,7 @@ def checkout_request(order_id: str):
         })
 
         # Publish Message
-        publisher.publish(message)
+        publisher.publish(message, correlation_id, "status")
 
         # Store request status
         value = msgpack.encode(RequestStatus(status='Pending'))
@@ -326,11 +363,6 @@ def get_status(correlation_id: str):
 
 
 if __name__ == '__main__':
-    # Start the status queue consumer in a separate Thread
-    status_thread = threading.Thread(target=consume_status_queue())
-    status_thread.daemon = True
-    status_thread.start()
-
     app.run(host="0.0.0.0", port=8000, debug=True, threaded=True)
 else:
     gunicorn_logger = logging.getLogger('gunicorn.error')
