@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 import atexit
@@ -17,7 +18,7 @@ import pika
 
 DB_ERROR_STR = "DB error"
 REQ_ERROR_STR = "Requests error"
-
+N_QUEUES = os.environ['MQ_REPLICAS']
 GATEWAY_URL = os.environ['GATEWAY_URL']
 
 app = Flask("order-service")
@@ -29,27 +30,60 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
 
 
 class Publisher(threading.Thread):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, queues, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.daemon = True
         self.is_running = True
         self.name = "Publisher"
-        self.queue = "main"
+        self.queues = queues
 
         parameters = pika.ConnectionParameters("rabbitmq", )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.queue, durable = True)
+        for queue in self.queues:
+            self.channel.queue_declare(queue, durable=True)
 
     def run(self):
         while self.is_running:
-            self.connection.process_data_events(time_limit=1)
+            counter = 0
+            try:
+                self.connection.process_data_events(time_limit=1)
+            except pika.exceptions.ConnectionClosedByBroker:
+                print("Connection closed by broker, retrying...")
+                counter += 1
+                if counter > 3:
+                    # Restart the service
+                    app.logger.error("Connection closed by broker, restarting service...")
+                    self.restart()
+                self.connect()
 
-    def _publish(self, message):
-        self.channel.basic_publish("", self.queue, body=message.encode(), properties=pika.BasicProperties(delivery_mode=2,))
+    def _publish(self, message, queue):
+        self.channel.basic_publish("", routing_key=str(queue), body=message.encode(), properties=pika.BasicProperties(delivery_mode=2,))
 
-    def publish(self, message):
-        self.connection.add_callback_threadsafe(lambda: self._publish(message))
+    def connect(self):
+        counter = 3
+        while counter > 0:
+            try: 
+                if not self.connection or self.connection.is_closed:
+                    parameters = pika.ConnectionParameters("rabbitmq", )
+                    self.connection = pika.BlockingConnection(parameters)
+                    for queue in self.queues:
+                        self.channel.queue_declare(queue, durable=True)
+            except Exception as e: 
+                print(f"Failed to connect to RabbitMQ: {str(e)}")
+                time.sleep(5)
+                counter -= 1
+                self.connect()
+        if counter == 0:
+            raise Exception("Failed to connect to RabbitMQ after several attempts, dropping message...")
+
+    def publish(self, message, queue):
+        try:
+            self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
+        except pika.exceptions.ConnectionClosed: 
+            print("Connection closed, reconnecting...")
+            self.connect()
+            self.connection.add_callback_threadsafe(lambda: self._publish(message, queue))
 
     def stop(self):
         print("Stopping...")
@@ -60,12 +94,23 @@ class Publisher(threading.Thread):
             self.connection.close()
         print("Stopped")
 
+    def get_user_id(self, order_id):
+        order_entry: OrderValue = get_order_from_db(order_id)
+        return order_entry.user_id
+
+    def get_queue_for_order(self, key):
+        """Get the queue for the given key. E.g. order_id or user_id."""
+        return self.queues[int(hashlib.md5(key.encode()).hexdigest(), 16) % int(N_QUEUES)]
+
 
 def create_connection():
     retries = 5
+    queues = []
+    for i in range(int(N_QUEUES)):
+        queues.append(f"main_{i}")
     while retries > 0:
         try:
-            publisher = Publisher()
+            publisher = Publisher(queues)
             publisher.start()
             return publisher
         except pika.exceptions.AMQPConnectionError as e:
@@ -183,7 +228,8 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
             "function": "handle_add_item",
             "args": [order_id, item_id, quantity]
         })
-        publisher.publish(message)
+        queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        publisher.publish(message, queue)
         return jsonify({"success": "Item addition request sent"}), 200
     except Exception as e:
         print(e)
@@ -220,10 +266,11 @@ def rollback_stock(removed_items: list[tuple[str, int]]):
 
 @app.post('/checkout/<order_id>')
 def checkout_request(order_id: str):
+    app.logger.debug(f"Initiating checkout for order {order_id}")
     try:
-        # # Get Order
+        # # user_id from order
         # order_entry: OrderValue = get_order_from_db(order_id)
-
+        # user_id = order_entry.user_id
         # Create Message
         message = json.dumps({
             "function": "handle_checkout",
@@ -231,7 +278,8 @@ def checkout_request(order_id: str):
         })
 
         # Publish Message
-        publisher.publish(message)
+        queue = publisher.get_queue_for_order(publisher.get_user_id(order_id))
+        publisher.publish(message, queue)
 
         return jsonify({"success": "Checkout request sent"}), 202
     except Exception as e:
@@ -254,8 +302,13 @@ def checkout_process(order_id: str):
     except redis.exceptions.RedisError:
         return abort(500, DB_ERROR_STR)
 
-    app.logger.debug("Checkout successful")
+    app.logger.debug("Checkout successful for order {order_id}")
     return Response("Checkout successful", status=200)
+
+
+# @app.post('/checkout/failed/<order_id>')
+# def checkout_failed(order_id: str):
+#     return jsonify({"error": "Checkout failed"}), 500
 
 
 if __name__ == '__main__':
