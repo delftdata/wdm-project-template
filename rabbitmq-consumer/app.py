@@ -49,28 +49,33 @@ def handle_checkout(order_id: str):
         items_quantities[item_id] += quantity
 
     removed_items = []
-
+    paid = False
     try:
+        # Try to pay
+        payment_reply = requests.post(f"{GATEWAY_URL}/payment/pay/{user_id}/{total_cost}")
+        if payment_reply.status_code != 200:
+            print(f"User out of credit: {user_id}")
+            return
+        else:
+            paid = True
+
         # Subtract stock for each item
         for item_id, quantity in items_quantities.items():
             stock_reply = requests.post(f"{GATEWAY_URL}/stock/subtract/{item_id}/{quantity}")
             if stock_reply.status_code != 200:
+                if paid:
+                    rollback_payment(user_id, total_cost)
                 rollback_stock(removed_items, order_id)
                 print(f"Out of stock on item_id: {item_id}")
                 return
 
             removed_items.append((item_id, quantity))
 
-        # Process payment
-        payment_reply = requests.post(f"{GATEWAY_URL}/payment/pay/{user_id}/{total_cost}")
-        if payment_reply.status_code != 200:
-            rollback_stock(removed_items, order_id)
-            print(f"User out of credit: {user_id}")
-            return
-
         # Update order status to paid
         order_update_reply = requests.post(f"{GATEWAY_URL}/orders/checkoutProcess/{order_id}")
         if order_update_reply.status_code != 200:
+            if paid:
+                rollback_payment(user_id, total_cost)
             rollback_stock(removed_items, order_id)
             print(f"Failed to update order status: {order_id}")
             return
@@ -78,8 +83,15 @@ def handle_checkout(order_id: str):
         print(f"Checkout handled successfully: {order_id}, calculated queue: {get_queue_for_order(user_id)}")
 
     except Exception as e:
-        rollback_stock(removed_items)
+        if paid:
+            rollback_payment(user_id, total_cost)
+        rollback_stock(removed_items, order_id)
         print(f"Failed to handle checkout: {str(e)}")
+
+
+def rollback_payment(user_id: str, amount: int):
+    print(f"Rolling back payment for user: {user_id}. Amount: {amount}")
+    response = requests.post(f"{GATEWAY_URL}/payment/add_funds/{user_id}/{amount}")
 
 
 def rollback_stock(removed_items: list, order_id: str):
