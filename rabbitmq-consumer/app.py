@@ -26,7 +26,7 @@ def get_request(url):
         try:
             response = requests.get(url)
             response_json = response.json()
-        except requests.exceptions.JSONDecodeError:
+        except (requests.exceptions.JSONDecodeError, requests.exceptions.ConnectionError):
             print("Target service down. Trying again later...")
             time.sleep(3)
         else:
