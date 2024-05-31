@@ -57,3 +57,4 @@ class RabbitMQConsumer:
                     time.sleep(3)
                 channel = conn.channel()
                 channel.queue_declare(queue=queue, durable=True)
+                continue
