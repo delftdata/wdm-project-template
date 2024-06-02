@@ -1,7 +1,7 @@
 import pika
 import json
 import time
-
+from enum import Enum
 
 class RabbitMQConsumer:
     @staticmethod
@@ -9,7 +9,7 @@ class RabbitMQConsumer:
         functions.update(globals())
         if 'function' not in message.keys():
             # Invalid request, do not retry
-            return True
+            return RequestStatusEnum.FAIL
         return functions[message['function']](*message['args'])
 
     @staticmethod
@@ -50,20 +50,25 @@ class RabbitMQConsumer:
                         res = json.loads(body.decode())
                         response = self.process(res, functions)
 
-                        # Send the status message to the status queue
+                        # Prepare the status message
                         status_message = {
                             'status': 'Processed',
                             'correlation_id': properties.correlation_id
                         }
-                        self.send_status(properties.reply_to, status_message, channel)
 
                         # We signal that the message is received and processed, rabbitMQ will now remove it from the
-                        # queue
-                        if response:
+                        # queue or retry
+                        if response == RequestStatusEnum.SUCCESS:
+                            channel.basic_ack(delivery_tag=method.delivery_tag)
+                        elif response == RequestStatusEnum.FAIL:
+                            status_message['status'] = 'Failed'
                             channel.basic_ack(delivery_tag=method.delivery_tag)
                         else:
                             # Try again later
+                            status_message['status'] = 'Retrying'
                             channel.basic_nack(delivery_tag=method.delivery_tag)
+                        # Send the status message to the status queue
+                        self.send_status(properties.reply_to, status_message, channel)
             except (pika.exceptions.StreamLostError, pika.exceptions.ConnectionClosedByBroker):
                 print("Connection to RabbitMQ Lost. Retrying connection...")
                 try:
@@ -86,3 +91,8 @@ class RabbitMQConsumer:
                 channel = conn.channel()
                 channel.queue_declare(queue=queue, durable=True)
                 continue
+
+class RequestStatusEnum(Enum):
+    SUCCESS = 1
+    RETRY = 2
+    FAIL = 3

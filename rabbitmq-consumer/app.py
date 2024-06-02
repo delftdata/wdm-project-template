@@ -4,13 +4,12 @@ import threading
 import requests
 from collections import defaultdict
 import os
-from rabbitMQConsumer import RabbitMQConsumer
+from rabbitMQConsumer import RabbitMQConsumer, RequestStatusEnum
 import hashlib
 
 GATEWAY_URL = os.environ['GATEWAY_URL']
 N_QUEUES = os.environ['MQ_REPLICAS']
 REPLICA_INDEX = os.environ['REPLICA_INDEX']
-
 
 # Example function. You can put RabbitMQ, POST and GET requests to communicate with apps.
 def hello_world(hello, world):
@@ -25,6 +24,9 @@ def get_request(url):
     while True:
         try:
             response = requests.get(url)
+            if response.status_code == 400:
+                print("GET request returned status code 400")
+                return response, {}
             response_json = response.json()
         except (requests.exceptions.JSONDecodeError, requests.exceptions.ConnectionError):
             print("Target service down. Trying again later...")
@@ -44,13 +46,14 @@ def handle_add_item(order_id, item_id, quantity):
             f"{GATEWAY_URL}/orders/addItemProcess/{order_id.strip()}/{item_id.strip()}/{quantity.strip()}/{price}")
         if add_response.status_code == 200:
             print(f"Item {item_id} added {quantity} times successfully to order {order_id}")
-            return True
+            return RequestStatusEnum.SUCCESS
         else:
             print(
                 f"Failed to add item to order, status code: {add_response.status_code}, response: {add_response.text}")
-            return False
+            return RequestStatusEnum.RETRY
     else:
         print("Failed to retrieve item details")
+        return RequestStatusEnum.FAIL
 
 
 def handle_checkout(order_id: str):
@@ -70,7 +73,7 @@ def handle_checkout(order_id: str):
         payment_reply = requests.post(f"{GATEWAY_URL}/payment/pay/{user_id}/{total_cost}")
         if payment_reply.status_code != 200:
             print(f"User out of credit: {user_id}")
-            return True
+            return RequestStatusEnum.FAIL
         else:
             paid = True
 
@@ -82,7 +85,7 @@ def handle_checkout(order_id: str):
                     rollback_payment(user_id, total_cost)
                 rollback_stock(removed_items, order_id)
                 print(f"Out of stock on item_id: {item_id}")
-                return True
+                return RequestStatusEnum.FAIL
 
             removed_items.append((item_id, quantity))
 
@@ -93,16 +96,17 @@ def handle_checkout(order_id: str):
                 rollback_payment(user_id, total_cost)
             rollback_stock(removed_items, order_id)
             print(f"Failed to update order status: {order_id}")
-            return False
+            return RequestStatusEnum.RETRY
 
         print(f"Checkout handled successfully: {order_id}, calculated queue: {get_queue_for_order(user_id)}")
-        return True
+        return RequestStatusEnum.SUCCESS
 
     except Exception as e:
         if paid:
             rollback_payment(user_id, total_cost)
         rollback_stock(removed_items, order_id)
         print(f"Failed to handle checkout: {str(e)}")
+        return RequestStatusEnum.FAIL
 
 
 def rollback_payment(user_id: str, amount: int):
