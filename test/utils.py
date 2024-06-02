@@ -55,9 +55,7 @@ def add_item_to_order(order_id: str, item_id: str, quantity: int) -> int:
     return response.status_code
 
 def add_item_to_order_with_response(order_id: str, item_id: str, quantity: int) -> dict:
-    response = requests.post(f"{ORDER_URL}/orders/addItem/{order_id}/{item_id}/{quantity}")
-    print(response.json())
-    return response
+    return requests.post(f"{ORDER_URL}/orders/addItem/{order_id}/{item_id}/{quantity}")
 
 def find_order(order_id: str) -> dict:
     return requests.get(f"{ORDER_URL}/orders/find/{order_id}").json()
