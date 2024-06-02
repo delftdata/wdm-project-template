@@ -56,7 +56,6 @@ class RabbitMQConsumer:
                             'correlation_id': properties.correlation_id
                         }
                         self.send_status(properties.reply_to, status_message, channel)
-                        channel.queue_declare(queue=queue, durable=True)
 
                         # We signal that the message is received and processed, rabbitMQ will now remove it from the
                         # queue
