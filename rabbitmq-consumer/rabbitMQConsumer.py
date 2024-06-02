@@ -12,30 +12,21 @@ class RabbitMQConsumer:
             return True
         return functions[message['function']](*message['args'])
 
-    def send_status(self, queue: str, message: dict):
+    @staticmethod
+    def send_status(queue: str, message: dict, status_channel: pika.adapters.blocking_connection.BlockingChannel):
         # Establish a connection and channel for sending status messages
-        while True:
-            try:
-                status_conn = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
-            except pika.exceptions.AMQPConnectionError:
-                print(f"Retrying connection for queue {queue}...")
-                time.sleep(5)
-            else:
-                break
-        status_channel = status_conn.channel()
         status_channel.queue_declare(queue=queue, durable=True)
 
         # Publish the status message
         status_channel.basic_publish(
             exchange='',
             routing_key=queue,
-            body=json.dumps(message),
+            body=json.dumps(message).encode(),
             properties=pika.BasicProperties(
                 delivery_mode=2,  # Persistent message
                 correlation_id=message['correlation_id']
             )
         )
-
 
     def consume_queue(self, queue: str, functions: dict):
         while True:
@@ -64,7 +55,8 @@ class RabbitMQConsumer:
                             'status': 'Processed',
                             'correlation_id': properties.correlation_id
                         }
-                        self.send_status(properties.reply_to, status_message)
+                        self.send_status(properties.reply_to, status_message, channel)
+                        channel.queue_declare(queue=queue, durable=True)
 
                         # We signal that the message is received and processed, rabbitMQ will now remove it from the
                         # queue
