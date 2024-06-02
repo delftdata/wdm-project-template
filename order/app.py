@@ -323,7 +323,7 @@ def add_item_request(order_id: str, item_id: str, quantity: int):
         publisher.publish(message, queue, correlation_id, "status")
         value = msgpack.encode(RequestStatus(status='Pending'))
         db.set(correlation_id, value)
-        return jsonify({"success": "Item addition request sent"}), 200
+        return jsonify({"success": "Item addition request sent", "correlation_id": correlation_id}), 200
     except Exception as e:
         print(e)
         return jsonify({"error": "Failed to add item", "details": str(e)}), 500
